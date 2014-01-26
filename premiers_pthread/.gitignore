@@ -1,2 +1,3 @@
 premiers_pthread
 premiers_pthread.o
+*.out
