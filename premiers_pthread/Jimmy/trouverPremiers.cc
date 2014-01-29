@@ -17,7 +17,7 @@ void printArray(char* iArray, unsigned int iSize) {
 }
 
 void printPrimes(char* iArray, unsigned int iSize) {
-	for (unsigned int i = 2 ; i <= iSize ; i++) {
+	for (unsigned int i = 1 ; i <= iSize ; i++) {
 		if ((int)iArray[i] == 0) {
 			std::cout << i << " ";
 		}
@@ -27,11 +27,6 @@ void printPrimes(char* iArray, unsigned int iSize) {
 }
 
 int main(int argc, char **argv) {
-	/*
-	for (int i = 0 ; i < argc ; i++) {
-		std::cout << i << " : " << argv[i];
-	}
-	*/
 
 	if (argc < 3 || argc > 3) {
 		usage(argv[0]);
@@ -52,31 +47,26 @@ int main(int argc, char **argv) {
 
 	Chrono lChrono(true);
 
-	std::cout << "On retire tout les multiples de deux." << std::endl;
-
 	for (unsigned long long i = 4 ; i <= lMaxLimit ; i += 2) {
 		lArrayPrimes[i]++;
 	}
-
-	std::cout << "On applique le crible d'Ératosthène." << std::endl;
-
-	std::cout << sqrt(144) << std::endl;
 
 	long lSquareRoot = sqrt(lMaxLimit);
 
 	for (unsigned int i = 3 ; i <= lSquareRoot ; i += 2) {
 		if ((int)lArrayPrimes[i] == 0) {
-			for (unsigned int j = 3 ; (long)i * j <= lMaxLimit ; j += 2) {
-				lArrayPrimes[(long)i * j]++;
+			for (unsigned int j = i*i ; j <= lMaxLimit ; j += 2 * i) {
+				lArrayPrimes[j]++;
 			}
 		}
 	}
 
 	lChrono.pause();
 
-	std::cout << "Travail effectue en " << lChrono.get() << " secondes." << std::endl;
+	printPrimes(lArrayPrimes, lMaxLimit);
+	printArray(lArrayPrimes, lMaxLimit);
 
-//	printPrimes(lArrayPrimes, lMaxLimit);
+	std::cout << "Travail effectue en " << lChrono.get() << " secondes." << std::endl;
 
 	free(lArrayPrimes);
 
