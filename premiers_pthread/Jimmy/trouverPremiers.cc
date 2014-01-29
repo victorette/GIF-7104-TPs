@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
 	lChrono.pause();
 
 	printPrimes(lArrayPrimes, lMaxLimit);
-	printArray(lArrayPrimes, lMaxLimit);
+//	printArray(lArrayPrimes, lMaxLimit);
 
 	std::cout << "Travail effectue en " << lChrono.get() << " secondes." << std::endl;
 
