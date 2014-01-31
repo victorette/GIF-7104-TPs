@@ -46,25 +46,12 @@ int main(int argc, char *argv[]) {
 	int returnCode;
 	char buffer[256];
 
-	if (argc >= 2) {
-		maxLimit = atol(argv[1]);
-		numThreads = atol(argv[2]);
-	} else {
-		printf("Déterminer la limite supérieure pour la recherche: ");
-		fgets(buffer, 256, stdin);
-		maxLimit = atol(buffer);
-		if (maxLimit == 0) {
-			printf("limite non valide, par défaut, prendre 1000 \n");
-			maxLimit = 1000;
-		}
-		printf("Déterminer le nombre de fils d'exécution désiré: ");
-		fgets(buffer, 256, stdin);
-		numThreads = atoi(buffer);
-		if (numThreads == 0) {
-			printf("nombre de threads non valide, par défaut, prendre 1 \n");
-			numThreads = 1;
-		}
+	if (argc < 3 || argc > 3) {
+		printf("Usage> %s limite_prime_number number_of_threads\n", argv[0]);
+		exit(-1);
 	}
+	maxLimit = atol(argv[1]);
+	numThreads = atol(argv[2]);
 
 
 	lArrayPrimes = (char *) calloc(maxLimit, sizeof(char *));
@@ -106,7 +93,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	printf("\n");
-	printf("Primes numbers found : %i ", count);
+	printf("Limite Max : %i\nnumThreads : %i\n", maxLimit, numThreads);
+	printf("Primes numbers found : %i\n", count);
 
 	// Afficher le temps d'exécution dans le stderr
 	printf("Temps d'execution = %f sec\n", lChrono.get());
