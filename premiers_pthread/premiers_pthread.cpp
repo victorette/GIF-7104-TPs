@@ -44,7 +44,6 @@ int main(int argc, char *argv[]) {
 
 	int numThreads;
 	int returnCode;
-	char buffer[256];
 
 	if (argc < 3 || argc > 3) {
 		printf("Usage> %s limite_prime_number number_of_threads\n", argv[0]);
@@ -52,7 +51,6 @@ int main(int argc, char *argv[]) {
 	}
 	maxLimit = atol(argv[1]);
 	numThreads = atol(argv[2]);
-
 
 	lArrayPrimes = (char *) calloc(maxLimit, sizeof(char *));
 	// Multiples de 2
