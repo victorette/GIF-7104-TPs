@@ -1,15 +1,12 @@
-CXXFLAGS =	-O2 -g -Wall -fmessage-length=0
+CC=g++
+CFLAGS= -c -Wall -std=c++11
 
-OBJS =		premiers_pthread.o
+all: Main
+Main: premiers_pthread.o
+	$(CC) *.o -o tp1 -lpthread
 
-LIBS =
-
-TARGET =	premiers_pthread
-
-$(TARGET):	$(OBJS)
-	$(CXX) -o $(TARGET) $(OBJS) $(LIBS)
-
-all:	$(TARGET)
+premiers_pthread.o: premiers_pthread.cpp
+	$(CC) $(CFLAGS) premiers_pthread.cpp
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -rf *.o *.out tp1
