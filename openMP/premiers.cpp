@@ -2,7 +2,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <omp.h>
-#include "Chrono.hpp"
+//#include "Chrono.hpp"
+#include <time.h>
 
 // Programme qui trouve à l'aide de la passoire d'Ératosthène,
 // tous les nombres premiers inférieurs à un certain seuil 
@@ -18,16 +19,19 @@ int main(int argc, char *argv[])
     }
 
     // Démarrer le chronomètre
-    Chrono lChrono(true);
+    //Chrono lChrono(true);
+    clock_t start, stop;
+    start = clock();
  
     // Allouer le tableau des drapeaux (flags) d'invalidation
     char *lFlags = (char*) calloc(lMax, sizeof(*lFlags));
     assert(lFlags != 0);
-    #pragma omp parallel shared(lFlags) private(p,i)
+    unsigned long p;
+    #pragma omp parallel shared(lFlags) private(p)
     {
         // Appliquer la passoire d'Ératosthène
         #pragma omp for schedule(static)
-        for (unsigned long p=2; p < lMax; p++) {
+        for (p=2; p < lMax; p++) {
             if (lFlags[p] == 0) {
                 // invalider tous les multiples
                 for (unsigned long i=2; i*p < lMax; i++) {
@@ -37,7 +41,9 @@ int main(int argc, char *argv[])
         }
     }
     // Arrêter le chronomètre
-    lChrono.pause();
+    //lChrono.pause();
+    stop = clock();
+    double tm = (double) (stop-start)/CLOCKS_PER_SEC;
 
     // Afficher les nombres trouvés à la console
     for (unsigned long p=2; p<lMax; p++) {
@@ -46,7 +52,8 @@ int main(int argc, char *argv[])
     printf("\n");
 
     // Afficher le temps d'exécution dans le stderr
-    fprintf(stderr, "Temps d'execution = %f sec\n", lChrono.get());
+    //fprintf(stderr, "Temps d'execution = %f sec\n", lChrono.get());
+    printf("Temps d'execution : %lf s\n", tm); 
  
     return 0;
 }
