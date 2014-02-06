@@ -22,7 +22,6 @@ long lSquareRoot;
 int main(int argc, char *argv[]) {
 
 	int numThreads;
-	int returnCode;
 
 	if (argc < 3 || argc > 3) {
 		printf("Usage> %s limite_prime_number number_of_threads\n", argv[0]);
@@ -40,21 +39,24 @@ int main(int argc, char *argv[]) {
 	int base;
 	nextbase = 3;
 	lSquareRoot = sqrt(maxLimit);
-
+	int i, np;
 	// Démarrer le chronomètre
 	Chrono lChrono(true);
-
-	#pragma omp parallel shared(lArrayPrimes, nextbase) private(base)
+	
+	#pragma omp parallel num_threads(numThreads) shared(lArrayPrimes, nextbase) private(base,i)
     {
     	#pragma omp for schedule(static)
-		for (base = nextbase; base <= lSquareRoot; nextbase +=2){
+	//#pragma omp parallel for ordered schedule(dynamic)
+		for (base = nextbase; base <= lSquareRoot; base +=2){
 			if ((int)lArrayPrimes[base] == 0) {
-				for (int i = base; i * base <= maxLimit; i += 2){
+				for (i = base; i * base <= maxLimit; i += 2){
 					lArrayPrimes[i * base]++;
 				}
 			}
 		}
+		np = omp_get_num_threads();
 	}
+	//np = omp_get_num_threads();
 	// Arrêter le chronomètre
 	lChrono.pause();
 
@@ -67,7 +69,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	printf("\n");
-	printf("Limite Max : %i\nnumThreads : %i\n", maxLimit, numThreads);
+	printf("Limite Max : %i\nnumThreads : %i\n", maxLimit, np);
 	printf("Primes numbers found : %i\n", count);
 
 	// Afficher le temps d'exécution dans le stderr
