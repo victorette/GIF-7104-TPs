@@ -1,0 +1,76 @@
+//============================================================================
+// Name        : premiers_pthread.cpp
+// Author      : Victorette
+// Version     :
+// Copyright   : 
+// Description : Programme qui trouve à l'aide de la passoire d'Ératosthène,
+// tous les nombres premiers inférieurs à un certain seuil
+// spécifié sur la ligne de commande.
+//============================================================================
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <cmath>
+#include "Chrono.hpp"
+#include <omp.h>
+
+int numThreads, maxLimit, nextbase;
+char *lArrayPrimes;
+long lSquareRoot;
+
+int main(int argc, char *argv[]) {
+
+	int numThreads;
+	int returnCode;
+
+	if (argc < 3 || argc > 3) {
+		printf("Usage> %s limite_prime_number number_of_threads\n", argv[0]);
+		exit(-1);
+	}
+	maxLimit = atol(argv[1]);
+	numThreads = atol(argv[2]);
+
+	lArrayPrimes = (char *) calloc(maxLimit, sizeof(char *));
+	// Multiples de 2
+	lArrayPrimes[1]++;
+	for (int i = 4; i <= maxLimit; i += 2) {
+		lArrayPrimes[i]++;
+	}
+	int base;
+	nextbase = 3;
+	lSquareRoot = sqrt(maxLimit);
+
+	// Démarrer le chronomètre
+	Chrono lChrono(true);
+
+	#pragma omp parallel shared(lArrayPrimes, nextbase) private(base)
+    {
+    	#pragma omp for schedule(static)
+		for (base = nextbase; base <= lSquareRoot; nextbase +=2){
+			if ((int)lArrayPrimes[base] == 0) {
+				for (int i = base; i * base <= maxLimit; i += 2){
+					lArrayPrimes[i * base]++;
+				}
+			}
+		}
+	}
+	// Arrêter le chronomètre
+	lChrono.pause();
+
+	// Afficher les nombres trouvés à la console
+	int count = 0;
+	for (int i = 1; i <= maxLimit; i++) {
+		if ((int) lArrayPrimes[i] == 0) {
+			//printf("%i ", i);
+			count++;
+		}
+	}
+	printf("\n");
+	printf("Limite Max : %i\nnumThreads : %i\n", maxLimit, numThreads);
+	printf("Primes numbers found : %i\n", count);
+
+	// Afficher le temps d'exécution dans le stderr
+	printf("Temps d'execution = %f sec\n", lChrono.get());
+	return 0;
+}
