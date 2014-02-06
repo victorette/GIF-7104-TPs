@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
 {
     // Déterminer la limite supérieure pour la recherche;
     // par défaut, prendre 1000
-    unsigned long lMax = 1000;
+    unsigned long lMax = 1000000000;
     if (argc >= 2) {
         lMax = atol(argv[1]);
     }
@@ -46,9 +46,11 @@ int main(int argc, char *argv[])
     double tm = (double) (stop-start)/CLOCKS_PER_SEC;
 
     // Afficher les nombres trouvés à la console
+    int count = 0;
     for (unsigned long p=2; p<lMax; p++) {
-        if (lFlags[p] == 0) printf("%ld ", p);
+        if (lFlags[p] == 0) count++;//printf("%ld ", p);
     }
+    printf("Total : %i",count);
     printf("\n");
 
     // Afficher le temps d'exécution dans le stderr

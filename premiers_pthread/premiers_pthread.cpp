@@ -55,7 +55,7 @@ int main(int argc, char *argv[]) {
 	lArrayPrimes = (char *) calloc(maxLimit, sizeof(char *));
 	// Multiples de 2
 	lArrayPrimes[1]++;
-	for (unsigned long i = 4; i <= maxLimit; i += 2) {
+	for (int i = 4; i <= maxLimit; i += 2) {
 		lArrayPrimes[i]++;
 	}
 	nextbase = 3;

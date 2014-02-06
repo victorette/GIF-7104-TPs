@@ -1,2 +1,9 @@
 *.out
 compile.sh
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
+logThread*
+Makefile
+tp1
+tp2
