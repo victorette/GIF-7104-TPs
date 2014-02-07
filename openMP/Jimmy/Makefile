@@ -6,13 +6,13 @@ tp2Seq: premiers.o
 	$(CC) premiers.o -o tp2Seq
 
 tp2OpenMP: premiersOpenMP.o
-	$(CC) premiersOpenMP.o -o tp2OpenMp -lgomp
+	$(CC) premiersOpenMP.o -o tp2OpenMp -fopenmp
 
 premiers.o: premiers.cpp
 	$(CC) $(CFLAGS) premiers.cpp
 
 premiersOpenMP.o: premiersOpenMP.cpp
-	$(CC) $(CFLAGS) premiersOpenMP.cpp
+	$(CC) $(CFLAGS) premiersOpenMP.cpp -fopenmp
 
 clean:
 	rm -rf *.o *.out tp2*
