@@ -42,10 +42,10 @@ int main(int argc, char *argv[]) {
 	int i, np;
 	// Démarrer le chronomètre
 	Chrono lChrono(true);
-	
-	#pragma omp parallel num_threads(numThreads) shared(lArrayPrimes, nextbase) private(base,i)
+	//#pragma omp parallel shared(lArrayPrimes) private(base,i)
+	#pragma omp parallel num_threads(numThreads) shared(lArrayPrimes) private(base,i)
     {
-    	#pragma omp for schedule(static)
+    	#pragma omp for schedule(dynamic)
 	//#pragma omp parallel for ordered schedule(dynamic)
 		for (base = nextbase; base <= lSquareRoot; base +=2){
 			if ((int)lArrayPrimes[base] == 0) {
