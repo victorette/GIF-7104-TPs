@@ -1,18 +1,18 @@
 CC=g++
 CFLAGS= -c -Wall -std=c++11
 
-all: tp2Seq tp2OpenMP
-tp2Seq: premiers.o
-	$(CC) premiers.o -o tp2Seq
+all: tp2Original tp2OpenMP
+tp2Original: original.o
+	$(CC) original.o -o tp2Original
 
-tp2OpenMP: premiersOpenMP.o
-	$(CC) premiersOpenMP.o -o tp2OpenMp -fopenmp
+tp2OpenMP: trouverPremiersOpenMP.o
+	$(CC) trouverPremiersOpenMP.o -o tp2OpenMp -fopenmp
 
-premiers.o: premiers.cpp
-	$(CC) $(CFLAGS) premiers.cpp
+original.o: original.cc
+	$(CC) $(CFLAGS) original.cc
 
-premiersOpenMP.o: premiersOpenMP.cpp
-	$(CC) $(CFLAGS) premiersOpenMP.cpp -fopenmp
+trouverPremiersOpenMP.o: trouverPremiersOpenMP.cc
+	$(CC) $(CFLAGS) trouverPremiersOpenMP.cc -fopenmp
 
 clean:
 	rm -rf *.o *.out tp2*
