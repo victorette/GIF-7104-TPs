@@ -1,0 +1,39 @@
+Limite Max : 1000000000
+numThreads : 1
+Primes numbers found : 50847534
+Temps d'execution = 10.091955 sec
+
+Limite Max : 1000000000
+numThreads : 2
+Primes numbers found : 50847534
+Temps d'execution = 6.488780 sec
+
+Limite Max : 1000000000
+numThreads : 3
+Primes numbers found : 50847534
+Temps d'execution = 4.853998 sec
+
+Limite Max : 1000000000
+numThreads : 4
+Primes numbers found : 50847534
+Temps d'execution = 4.398243 sec
+
+Limite Max : 1000000000
+numThreads : 5
+Primes numbers found : 50847534
+Temps d'execution = 4.145368 sec
+
+Limite Max : 1000000000
+numThreads : 6
+Primes numbers found : 50847534
+Temps d'execution = 3.438219 sec
+
+Limite Max : 1000000000
+numThreads : 7
+Primes numbers found : 50847534
+Temps d'execution = 3.335627 sec
+
+Limite Max : 1000000000
+numThreads : 8
+Primes numbers found : 50847534
+Temps d'execution = 3.120903 sec

@@ -1,5 +1,5 @@
 //============================================================================
-// Name        : premiers_pthread.cpp
+// Name        : premiersOpenMP.cpp
 // Author      : Victorette
 // Version     :
 // Copyright   : 
@@ -42,11 +42,10 @@ int main(int argc, char *argv[]) {
 	int i, np;
 	// Démarrer le chronomètre
 	Chrono lChrono(true);
-	
-	#pragma omp parallel num_threads(numThreads) shared(lArrayPrimes, nextbase) private(base,i)
+
+	#pragma omp parallel num_threads(numThreads) shared(lArrayPrimes) private(base,i)
     {
-    	#pragma omp for schedule(static)
-	//#pragma omp parallel for ordered schedule(dynamic)
+    	#pragma omp for schedule(dynamic)
 		for (base = nextbase; base <= lSquareRoot; base +=2){
 			if ((int)lArrayPrimes[base] == 0) {
 				for (i = base; i * base <= maxLimit; i += 2){
@@ -56,7 +55,6 @@ int main(int argc, char *argv[]) {
 		}
 		np = omp_get_num_threads();
 	}
-	//np = omp_get_num_threads();
 	// Arrêter le chronomètre
 	lChrono.pause();
 
