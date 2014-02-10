@@ -65,7 +65,7 @@ printf("Nombre de fils utilises : %d\n", omp_get_num_threads());
     printf("\n");
 
     // Afficher le temps d'exécution dans le stderr
-    fprintf(stderr, "Temps d'execution = %f sec\n", lChrono.get());
+    printf("Temps d'execution = %f sec\n", lChrono.get());
  
     return 0;
 }
