@@ -1,45 +1,52 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <omp.h>
+#import <dispatch/dispatch.h>
+#include <cmath>
 //#include "Chrono.hpp"
 #include <time.h>
 
-// Programme qui trouve à l'aide de la passoire d'Ératosthène,
-// tous les nombres premiers inférieurs à un certain seuil 
-// spécifié sur la ligne de commande.
-// Attention, ce programme n'est aucunement optimisé!
-int main(int argc, char *argv[])
-{
-    // Déterminer la limite supérieure pour la recherche;
-    // par défaut, prendre 1000
-    unsigned long lMax = 1000000000;
-    if (argc >= 2) {
-        lMax = atol(argv[1]);
-    }
+int numThreads, maxLimit, nextbase;
+char *lArrayPrimes;
+long lSquareRoot;
 
+int main(int argc, char *argv[]) {
+
+    int numThreads;
+
+    if (argc < 3 || argc > 3) {
+        printf("Usage> %s limite_prime_number number_of_threads\n", argv[0]);
+        exit(-1);
+    }
+    maxLimit = atol(argv[1]);
+    numThreads = atol(argv[2]);
+
+    lArrayPrimes = (char *) calloc(maxLimit, sizeof(char *));
+    // Multiples de 2
+    lArrayPrimes[1]++;
+    for (int i = 4; i <= maxLimit; i += 2) {
+        lArrayPrimes[i]++;
+    }
+    int base;
+    nextbase = 3;
+    lSquareRoot = sqrt(maxLimit);
+    int i, np;
     // Démarrer le chronomètre
-    //Chrono lChrono(true);
     clock_t start, stop;
     start = clock();
- 
-    // Allouer le tableau des drapeaux (flags) d'invalidation
-    char *lFlags = (char*) calloc(lMax, sizeof(*lFlags));
-    assert(lFlags != 0);
-    unsigned long p;
-    #pragma omp parallel shared(lFlags) private(p)
-    {
-        // Appliquer la passoire d'Ératosthène
-        #pragma omp for schedule(static)
-        for (p=2; p < lMax; p++) {
-            if (lFlags[p] == 0) {
-                // invalider tous les multiples
-                for (unsigned long i=2; i*p < lMax; i++) {
-                    lFlags[i*p]++;
+
+    dispatch_group_t group = dispatch_group_create();
+    dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+    dispatch_group_async(group, queue, ^{
+        for (base = nextbase; base <= lSquareRoot; base +=2){
+            if ((int)lArrayPrimes[base] == 0) {
+                for (i = base; i * base <= maxLimit; i += 2){
+                    lArrayPrimes[i * base]++;
                 }
             }
         }
-    }
+    });
+
     // Arrêter le chronomètre
     //lChrono.pause();
     stop = clock();
@@ -47,11 +54,15 @@ int main(int argc, char *argv[])
 
     // Afficher les nombres trouvés à la console
     int count = 0;
-    for (unsigned long p=2; p<lMax; p++) {
-        if (lFlags[p] == 0) count++;//printf("%ld ", p);
+    for (int i = 1; i <= maxLimit; i++) {
+        if ((int) lArrayPrimes[i] == 0) {
+            //printf("%i ", i);
+            count++;
+        }
     }
-    printf("Total : %i",count);
     printf("\n");
+    printf("Limite Max : %i\nnumThreads : %i\n", maxLimit, np);
+    printf("Primes numbers found : %i\n", count);
 
     // Afficher le temps d'exécution dans le stderr
     //fprintf(stderr, "Temps d'execution = %f sec\n", lChrono.get());
