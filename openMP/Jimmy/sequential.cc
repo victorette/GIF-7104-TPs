@@ -15,7 +15,19 @@ int main(int argc, char *argv[])
     if (argc >= 2) {
         lMax = atol(argv[1]);
     }
+    maxLimit = atol(argv[1]);
+    numThreads = atol(argv[2]);
 
+    lArrayPrimes = (char *) calloc(maxLimit, sizeof(char *));
+    // Multiples de 2
+    lArrayPrimes[1]++;
+    for (int i = 4; i <= maxLimit; i += 2) {
+        lArrayPrimes[i]++;
+    }
+    int base;
+    nextbase = 3;
+    lSquareRoot = sqrt(maxLimit);
+    int i, np;
     // Démarrer le chronomètre
     Chrono lChrono(true);
  
@@ -43,6 +55,8 @@ int main(int argc, char *argv[])
     }
     printf("%d nombre premiers trouves", somme);
     printf("\n");
+    printf("Limite Max : %i\nnumThreads : %i\n", maxLimit, np);
+    printf("Primes numbers found : %i\n", count);
 
     // Afficher le temps d'exécution dans le stderr
     fprintf(stderr, "Temps d'execution = %f sec\n", lChrono.get());
