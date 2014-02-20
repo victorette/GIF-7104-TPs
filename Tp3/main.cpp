@@ -14,14 +14,13 @@ using namespace std;
 
 // Inverser la matrice par la méthode de Gauss-Jordan; implantation séquentielle.
 void invertSequential(Matrix& iA) {
-
 	// vérifier que la matrice est carrée
 	assert(iA.rows() == iA.cols());
 	// construire la matrice [A I]
 	MatrixConcatCols lAI(iA, MatrixIdentity(iA.rows()));
 
 	// traiter chaque rangée
-	for (size_t k=0; k<iA.rows(); ++k) {
+	for (size_t k = 0 ; k < iA.rows() ; ++k) {
 		// trouver l'index p du plus grand pivot de la colonne k en valeur absolue
 		// (pour une meilleure stabilité numérique).
 		size_t p = k;
@@ -56,6 +55,7 @@ void invertSequential(Matrix& iA) {
 			}
 		}
 	}
+		std::cout << lAI.str() << std::endl << std::endl;
 
 	// On copie la partie droite de la matrice AI ainsi transformée
 	// dans la matrice courante (this).
@@ -66,7 +66,57 @@ void invertSequential(Matrix& iA) {
 
 // Inverser la matrice par la méthode de Gauss-Jordan; implantation MPI parallèle.
 void invertParallel(Matrix& iA) {
-	// vous devez coder cette fonction
+	// vérifier que la matrice est carrée
+	assert(iA.rows() == iA.cols());
+	// construire la matrice [A I]
+	MatrixConcatCols lAI(iA, MatrixIdentity(iA.rows()));
+
+	// traiter chaque rangée
+	for (size_t k = 0 ; k < iA.rows() ; ++k) {
+		std::cout << lAI.str() << std::endl << std::endl;
+		
+		// trouver l'index p du plus grand pivot de la colonne k en valeur absolue
+		// (pour une meilleure stabilité numérique).
+		size_t p = k;
+		double lMax = fabs(lAI(k,k));
+		for(size_t i = k ; i < lAI.rows() ; ++i) {
+			if(fabs(lAI(i,k)) > lMax) {
+				lMax = fabs(lAI(i,k));
+				p = i;
+			}
+		}
+
+		// vérifier que la matrice n'est pas singulière
+		if (lAI(p, k) == 0) throw runtime_error("Matrix not invertible");
+
+		// échanger la ligne courante avec celle du pivot
+		if (p != k) lAI.swapRows(p, k);
+
+		double lValue = lAI(k, k);
+		for (size_t j=0; j<lAI.cols(); ++j) {
+			// On divise les éléments de la rangée k
+			// par la valeur du pivot.
+			// Ainsi, lAI(k,k) deviendra égal à 1.
+			lAI(k, j) /= lValue;
+		}
+
+		// Pour chaque rangée...
+		for (size_t i=0; i<lAI.rows(); ++i) {
+			if (i != k) { // ...différente de k
+				// On soustrait la rangée k
+				// multipliée par l'élément k de la rangée courante
+				double lValue = lAI(i, k);
+				lAI.getRowSlice(i) -= lAI.getRowCopy(k)*lValue;
+			}
+		}
+	}
+		std::cout << lAI.str() << std::endl << std::endl;
+
+	// On copie la partie droite de la matrice AI ainsi transformée
+	// dans la matrice courante (this).
+	for (unsigned int i=0; i<iA.rows(); ++i) {
+		iA.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
+	}
 }
 
 // Multiplier deux matrices.
@@ -94,15 +144,12 @@ int main(int argc, char** argv) {
 
 	double tempsDebut, seed;
 
-
 	if (lRank == 0) {
 		tempsDebut = MPI_Wtime();
 		seed = tempsDebut;
-		std::cout << tempsDebut;
+		seed = 0;
 		std::cout << lSize << " processus demarre." << std::endl;
 	}
-
-	std::cout << argc << std::endl;
 
 	MPI::COMM_WORLD.Bcast(&seed, 1, MPI::DOUBLE, 0);
 	srand((unsigned)seed);
@@ -113,10 +160,22 @@ int main(int argc, char** argv) {
 	}
 
 	MatrixRandom matrice(lDimension, lDimension);
+	Matrix matriceInverse(matrice);
+
+	invertParallel(matriceInverse);
+	//invertSequential(matriceInverse);
+
+	Matrix lDot = multiplyMatrix(matrice, matriceInverse);
 
 	MPI::COMM_WORLD.Barrier();
 
-	std::cout << matrice.str() << std::endl;
+	if (lRank == 0) {
+		std::cout << "Matrice aleatoire : " << std::endl << matrice.str() << std::endl;
+		std::cout << "Matrice Inverse : " << std::endl << matriceInverse.str() << std::endl;
+		std::cout << "Produit des matrices : " << std::endl << lDot.str() << std::endl;
+
+		std::cout << "Erreur " << lDot.getDataArray().sum() - lDimension << std::endl;
+	}
 
 	if (lRank == 0) {
 		std::cout << MPI_Wtime() - tempsDebut << " secondes ecoule." << std::endl;
@@ -137,7 +196,7 @@ int main(int argc, char** argv) {
     Matrix lB(lA); 
     invertSequential(lB);
 	cout << "Matrice inverse:\n" << lB.str() << endl;
-    
+   
     Matrix lRes = multiplyMatrix(lA, lB);
     cout << "Produit des deux matrices:\n" << lRes.str() << endl;
     
