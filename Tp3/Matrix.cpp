@@ -60,8 +60,10 @@ MatrixIdentity::MatrixIdentity(size_t iSize) : Matrix(iSize, iSize) {
 // Construire une matrice aléatoire [0,1) iRows x iCols.
 // Utiliser srand pour initialiser le générateur de nombres.
 MatrixRandom::MatrixRandom(size_t iRows, size_t iCols) : Matrix(iRows, iCols) {
+	//std::cout << "Random Max : " << RAND_MAX << " " << (int)rand()%100 << std::endl;
     for (size_t i=0; i<mData.size(); ++i) {
-        mData[i] = (double)rand()/RAND_MAX;;
+        mData[i] = (int)rand()%101;
+        //mData[i] = (double)rand()/RAND_MAX;;
     }
 }
 
