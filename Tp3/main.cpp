@@ -66,6 +66,8 @@ void invertSequential(Matrix& iA) {
 
 // Inverser la matrice par la méthode de Gauss-Jordan; implantation MPI parallèle.
 void invertParallel(Matrix& iA) {
+	struct {double val; int ligne;} send, recv;
+	int* ligneTransfert = new int[iA.rows()]; 
 	// vérifier que la matrice est carrée
 	assert(iA.rows() == iA.cols());
 	// construire la matrice [A I]
@@ -90,9 +92,25 @@ void invertParallel(Matrix& iA) {
 				}
 			}
 		}
-		
-		std::cout << "Processus " << lRank << " max (" << p << ")" << std::endl;
 
+		send.val = lAI(p, k);
+		send.ligne = p;
+
+		// On trouve qui detient la plus grande valeur pour le pivot.
+		MPI::COMM_WORLD.Allreduce((void *)&send, (void *)&recv, 1, MPI::DOUBLE_INT, MPI::MAXLOC);
+		//std::cout << lAI.getColumnCopy(recv.ligne).str() << std::endl;
+		if (recv.ligne%lSize == 0) {
+			for (size_t i = 0 ; i < lAI.rows() ; i++) ligneTransfert[i] = lAI(recv.ligne, i);
+		}
+		std::valarray<double> copieLigne = lAI.getRowCopy(0);
+		std::cout << copieLigne[0] << " - - - " << copieLigne[1];
+/*		MPI::COMM_WORLD.Bcast(&ligneTransfert, lAI.rows(), MPI::DOUBLE, p%lSize);
+
+		if (lRank == 0) {
+			std::cout << "Ligne " << recv.ligne << " max (" << recv.val << ")" << std::endl;
+			for (size_t i = 0 ; i < lAI.rows() ; i++) std::cout << ligneTransfert[i] << " "; std::cout << std::endl;
+		}
+*/
 		// vérifier que la matrice n'est pas singulière
 		if (lAI(p, k) == 0) throw runtime_error("Matrix not invertible");
 
@@ -124,6 +142,7 @@ void invertParallel(Matrix& iA) {
 	for (unsigned int i=0; i<iA.rows(); ++i) {
 		iA.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
 	}
+	delete[] ligneTransfert;
 }
 
 // Multiplier deux matrices.
@@ -178,10 +197,10 @@ int main(int argc, char** argv) {
 
 	if (lRank == 0) {
 		std::cout << "Matrice aleatoire : " << std::endl << matrice.str() << std::endl;
-		std::cout << "Matrice Inverse : " << std::endl << matriceInverse.str() << std::endl;
-		std::cout << "Produit des matrices : " << std::endl << lDot.str() << std::endl;
+		//std::cout << "Matrice Inverse : " << std::endl << matriceInverse.str() << std::endl;
+		//std::cout << "Produit des matrices : " << std::endl << lDot.str() << std::endl;
 
-		std::cout << "Erreur " << lDot.getDataArray().sum() - lDimension << std::endl;
+		//std::cout << "Erreur " << lDot.getDataArray().sum() - lDimension << std::endl;
 	}
 
 	if (lRank == 0) {
