@@ -71,20 +71,27 @@ void invertParallel(Matrix& iA) {
 	// construire la matrice [A I]
 	MatrixConcatCols lAI(iA, MatrixIdentity(iA.rows()));
 
+	int lRank = MPI::COMM_WORLD.Get_rank();
+	int lSize = MPI::COMM_WORLD.Get_size();
+
 	// traiter chaque rangée
 	for (size_t k = 0 ; k < iA.rows() ; ++k) {
-		std::cout << lAI.str() << std::endl << std::endl;
-		
+//		std::cout << lAI.str() << std::endl << std::endl;
 		// trouver l'index p du plus grand pivot de la colonne k en valeur absolue
 		// (pour une meilleure stabilité numérique).
 		size_t p = k;
 		double lMax = fabs(lAI(k,k));
-		for(size_t i = k ; i < lAI.rows() ; ++i) {
-			if(fabs(lAI(i,k)) > lMax) {
-				lMax = fabs(lAI(i,k));
-				p = i;
+		for(size_t i = k + lRank ; i < lAI.rows() ; i++) {
+			if (i%(lSize) == (unsigned)lRank) { 
+				//std::cout << "Processus " << lRank << " ligne (" << k << ") : " << i << std::endl;
+				if(fabs(lAI(i,k)) > lMax) {
+					lMax = fabs(lAI(i,k));
+					p = i;
+				}
 			}
 		}
+		
+		std::cout << "Processus " << lRank << " max (" << p << ")" << std::endl;
 
 		// vérifier que la matrice n'est pas singulière
 		if (lAI(p, k) == 0) throw runtime_error("Matrix not invertible");
