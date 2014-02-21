@@ -22,6 +22,7 @@ double * convertirArray(std::valarray<double> tablo) {
 
 std::string afficherArray(std::valarray<double> tablo) {
 	std::ostringstream oss;
+	oss.precision(2);
 	oss << "[";
 	for (size_t i = 0 ; i < tablo.size() ; i++)
 		oss << tablo[i] << ", ";
@@ -91,19 +92,14 @@ void invertParallel(Matrix& iA) {
 	
 	int lRank = MPI::COMM_WORLD.Get_rank();
 	int lSize = MPI::COMM_WORLD.Get_size();
-
 	// traiter chaque rangée
 	for (size_t k = 0 ; k < iA.rows() ; ++k) {
-//		std::cout << lAI.str() << std::endl << std::endl;
 		// trouver l'index p du plus grand pivot de la colonne k en valeur absolue
 		// (pour une meilleure stabilité numérique).
 		size_t p = k;
 		double lMax = fabs(lAI(k,k));
 		for(size_t i = k ; i < lAI.rows() ; i++) {
-			//std::cout << "Traite ligne " << i << " max(" << lMax << ")" << std::endl;
 			if (i%(lSize) == (unsigned)lRank) { 
-				//std::cout << "Processus " << lRank << " ligne (" << k << ") : " << i << std::endl;
-				//std::cout << "  Valeur traite : " << lAI(i, k) << std::endl;
 				if(fabs(lAI(i,k)) > lMax) {
 					lMax = fabs(lAI(i,k));
 					p = i;
@@ -115,36 +111,20 @@ void invertParallel(Matrix& iA) {
 
 		// On trouve qui detient la plus grande valeur pour le pivot.
 		MPI::COMM_WORLD.Allreduce((void *)&send, (void *)&recv, 1, MPI::DOUBLE_INT, MPI::MAXLOC);
-		//if (lRank == 0) 
-		//std::cout << std::endl << " Iteration : " << k << " recv.ligne : " << recv.ligne << " recv.val : " << recv.val << " Processeur : " << recv.ligne%lSize << std::endl;
-
 		std::valarray<double> copieLigne = lAI.getRowCopy(recv.ligne);
 
 		double * tableauConverti = convertirArray(copieLigne);
-/*		
-if (lRank == p%lSize) {
-			std::cout << "Processus " << lRank << " Bcast :" << std::endl;
-			afficherArray(tableauConverti, copieLigne.size());
-		}*/
+
 		MPI::COMM_WORLD.Bcast(tableauConverti, copieLigne.size(), MPI::DOUBLE, p%lSize);
 		
-		/*
-			std::cout << "Processus " << lRank << " recoit :" << std::endl;
-			afficherArray(tableauConverti, copieLigne.size());
-*/
+		std::cout << "Processus " << lRank << " : " << afficherArray(lAI.getDataArray()) << std::endl;
+		
 		for (size_t i = 0 ; i < copieLigne.size() ; i++) {
-			if (lRank == 0)
-			std::cout << lAI(k, i) << " ";
 			lAI(recv.ligne, i) = tableauConverti[i];
 		}
 
 		delete[] tableauConverti;
-/*
-		if (lRank == 0) {
-			std::cout << "Ligne " << recv.ligne << " max (" << recv.val << ")" << std::endl;
-			for (size_t i = 0 ; i < lAI.rows() ; i++) std::cout << ligneTransfert[i] << " "; std::cout << std::endl;
-		}
-*/
+
 		// vérifier que la matrice n'est pas singulière
 		if (lAI(p, k) == 0) {
 			std::cout << "Processus " << lRank << " lance exception." << std::endl;
@@ -161,11 +141,7 @@ if (lRank == p%lSize) {
 			// Ainsi, lAI(k,k) deviendra égal à 1.
 			lAI(k, j) /= lValue;
 		}
-/*
-		if (lRank == 0) std::cout << std::endl;
-		if (lRank == 0) std::cout << lAI.str(); 
-		if (lRank == 0) std::cout << std::endl;
-*/
+
 		// Pour chaque rangée...
 		for (size_t i=0; i<lAI.rows(); ++i) {
 			if (i != k) { // ...différente de k
@@ -179,22 +155,39 @@ if (lRank == p%lSize) {
 		}
 	}
 
+	std::cout << "Before remove identiry " << afficherArray(lAI.getDataArray()) << std::endl;
 	// On copie la partie droite de la matrice AI ainsi transformée
 	// dans la matrice courante (this).
-	for (unsigned int i=0; i<iA.rows(); ++i) {
+	for (unsigned int i = 0 ; i < iA.rows() ; ++i) {
 		lAI.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
 	}
 	
 	double * recept = (double *)malloc(lSize * iA.rows() * iA.rows() * sizeof(double));
 	int recvcounts = iA.rows() * iA.rows();
+	std::cout << "Before Gather " << afficherArray(lAI.getDataArray()) << std::endl;
 	double * tablo = convertirArray(lAI.getDataArray());
 	MPI::COMM_WORLD.Gather(tablo, iA.rows() * iA.rows(), MPI::DOUBLE, recept, recvcounts, MPI::DOUBLE, 0);
 	
-	if (lRank == 0)
-		for (int i = 0 ; i < lSize * lAI.rows() * lAI.rows() ; i++) {
+	if (lRank == 0) {
+		int processus = 0;
+		int ligne = 0;
+		int colonne = 0;
+		int indiceTableau = 0;
+		std::cout.precision(2);
+		std::cout << "Processus 0 : ";
+		for (size_t i = 0 ; i < lSize * lAI.rows() * lAI.rows() ; i++) {
+			processus = i / (lAI.rows() * lAI.rows());
+			colonne = i % lAI.rows();
+			ligne = (i % (lAI.rows() * lAI.rows()) / lAI.rows());
+			if (i%(lAI.rows() * lAI.rows()) == 0 && i != 0) std::cout << std::endl << "Processus " << (i / (lAI.rows() * lAI.rows())) << " : ";
+			if (i%lAI.rows() == 0) std::cout << "| ";
+			std::cout << ligne << colonne;
+			if ((ligne % lSize) == processus) std::cout << "*";
 			std::cout << recept[i] << " ";
-			if (i%(lAI.rows() * lAI.rows()) == 0) std::cout << std::endl;
+			if ((ligne % lSize) == processus)
+				iA.getDataArray()[indiceTableau++] = recept[i];
 		}
+	}
 
 	//double * tablo = convertirArray(lAI.getDataArray());
 	//std::cout << "Processus " << lRank << " " << afficherArray(lAI.getDataArray()) << std::endl;
@@ -241,15 +234,6 @@ int main(int argc, char** argv) {
 	}
 
 	MatrixRandom matrice(lDimension, lDimension);
-	//matrice(0, 0) = 1.0;
-	//matrice(0, 1) = -2.0;
-	//matrice(0, 2) = 3.0;
-	//matrice(1, 0) = 0.0;
-	//matrice(1, 1) = -1.0;
-	//matrice(1, 2) = 4.0;
-	//matrice(2, 0) = 0.0;
-	//matrice(2, 1) = 0.0;
-	//matrice(2, 2) = 1.0;
 	Matrix matriceInverse(matrice);
 
 	invertParallel(matriceInverse);
@@ -261,9 +245,12 @@ int main(int argc, char** argv) {
 	MPI::COMM_WORLD.Barrier();
 
 	if (lRank == 0) {
+		Matrix matriceInverseSeq(matrice);
+		invertSequential(matriceInverseSeq);
 		std::cout << std::endl << std::endl << "Sortie : " << std::endl;
 		std::cout << "Matrice aleatoire : " << std::endl << matrice.str() << std::endl;
 		std::cout << "Matrice Inverse : " << std::endl << matriceInverse.str() << std::endl;
+		std::cout << "Matrice Inverse (solution) : " << std::endl << matriceInverseSeq.str() << std::endl;
 		//std::cout << "Produit des matrices : " << std::endl << lDot.str() << std::endl;
 
 		std::cout << "Erreur " << lDot.getDataArray().sum() - lDimension << std::endl;
