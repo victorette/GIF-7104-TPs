@@ -171,7 +171,6 @@ void invertParallel(Matrix& iA) {
 				}
 			}
 		}
-		std::cout << "Apres down : " << lRank << std::endl << lAI.str() << std::endl;
 		//std::cout << "Apres Processus " << lRank << std::endl << lAI.str() << std::endl;
 	}
 
@@ -186,19 +185,23 @@ void invertParallel(Matrix& iA) {
 	MPI::COMM_WORLD.Barrier();
 
 	double * tablo = convertirArray(iA.getDataArray());
+	std::cout << lRank << " : " << convertirArrayEnString(tablo, iA.rows() * iA.rows()) << std::endl;
 	MPI::COMM_WORLD.Gather(tablo, iA.rows() * iA.rows(), MPI::DOUBLE, recept, recvcounts, MPI::DOUBLE, 0);
 	
 	if (lRank == 0) {
+		std::cout << convertirArrayEnString(recept, iA.rows() * iA.rows() * lSize) << std::endl;
 		int processus = 0;
 		int ligne = 0;
-		int indiceTableau = 0;
+		int colonne = 0;
 		std::cout.precision(2);
 		for (size_t i = 0 ; i < lSize * lAI.rows() * lAI.rows() ; i++) {
 			processus = i / (lAI.rows() * lAI.rows());
 			ligne = (i % (lAI.rows() * lAI.rows()) / lAI.rows());
-
-			if ((ligne % lSize) == processus)
-				iA.getDataArray()[indiceTableau++] = recept[i];
+			colonne = (i % (iA.rows()));
+			//std::cout << "(" << processus << ") [" << ligne << ", " << colonne << "] : " << recept[i] << std::endl;
+			if ((ligne % lSize) == processus) {
+				iA.getDataArray()[(ligne * lAI.rows()) + colonne] = recept[i];
+			}
 		}
 	}
 
