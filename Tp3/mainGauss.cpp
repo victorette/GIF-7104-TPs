@@ -28,8 +28,8 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 	struct
 	{
 		double value;
-		int node;
-	} in, out;
+		int ligne;
+	} send, recv;
 
 	// vérifier que la matrice est carrée
     assert(iA.rows() == iA.cols());
@@ -47,33 +47,52 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 		// a. Déterminer localement le q parmi les lignes qui appartiennent à r, puis
 		// faire une reduction (Allreduce avec MAXLOC) pour déterminer le q global
 		q = k;
-        in.value = fabs(lAI(k,k));
-        for(i = k; i < lAI.rows(); ++i) {
-            if(fabs(lAI(i,k)) > in.value && i % lProcSize == lRank) {
-                in.value = fabs(lAI(i,k));
-                q = i;
-                in.node = q;
-            }
+        double lMax = fabs(lAI(k,k));
+        for(i = lRank; i < lAI.rows(); ++i) {
+        	if (i % lProcSize == (unsigned)lRank)
+        	{
+	            if(fabs(lAI(i,k)) > lMax) {
+	                lMax = fabs(lAI(i,k));
+	                q = i;
+	            }
+        	}
         }
-		COMM_WORLD.Reduce(&in,&out,1,MPI_DOUBLE_INT,MPI_MAXLOC,0);
+        send.value = lAI(q, k);
+        send.ligne = q;
+
+		COMM_WORLD.Allreduce((void *)&send,(void *)&recv,1,MPI::DOUBLE_INT,MPI::MAXLOC);
+
         if (lRank == 0) {
-        	cout << "Indice: " << out.node << " - Value: " << out.value << endl;
 			
 			// b. Si la valeur du max est nulle, la matrice est singulière (ne peut être
 			// inversée)
-			if (lAI(out.node, k) == 0) throw runtime_error("Matrix not invertible");
-			q = out.node;
+			if (lAI(recv.ligne, k) == 0) throw runtime_error("Matrix not invertible");
+
 			// c. Diffuser (Bcast) la ligne q appartenant au processus r=q%p (r est root)
 			// FIXME ça ne marche pas...chaque fil possede un q diff
-			COMM_WORLD.Bcast(&q,1,MPI_INT,0);
-        }
-        // MPI_Bcast(&q, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        COMM_WORLD.Barrier();
+        	// COMM_WORLD.Bcast(&ligne, 1, MPI::INT, 0);
+        } 
+    	valarray<double> copieLigne = lAI.getRowCopy(recv.ligne);
+        double * tableauConverti = &copieLigne[0];//new double[iA.rows()];
+		// tableauConverti = &copieLigne[0];
+		MPI::COMM_WORLD.Bcast(tableauConverti, copieLigne.size(), MPI::DOUBLE, recv.ligne % lProcSize);
+  //       if (recv.ligne % lProcSize == lRank) {
+		// }
 
+		for (size_t i = 0 ; i < copieLigne.size() ; i++) {
+			//if (lRank == 0)
+			std::cout << "Rank " << lRank << " : " << lAI(k, i) << "; ";
+			lAI(recv.ligne, i) = tableauConverti[i];
+		}
+		delete[] tableauConverti;
+		
+		// cout << "Tableau: " << tableauConverti[0] << endl;
+        // cout << "Rank: " << lRank << " k: " << k  << " Q: " << recv.ligne << endl;
 		// // d. Permuter localement les lignes q et k
+		q = recv.ligne;
 		if (q != k) lAI.swapRows(q, k);
 
-		// e. Normaliser la ligne k afin que l’élément (k,k) égale 1
+		// // e. Normaliser la ligne k afin que l’élément (k,k) égale 1
 		double lValue = lAI(k, k);
 		for (j = 0; j < lAI.cols(); ++j) {
 			// On divise les éléments de la rangée k
@@ -81,8 +100,7 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 			// Ainsi, lAI(k,k) deviendra égal à 1.
 			lAI(k, j) /= lValue;
 		}
-
-		// f. Éliminer les éléments (i,k) pour toutes les lignes i qui appartiennent au processus r, sauf pour la ligne k
+		// // f. Éliminer les éléments (i,k) pour toutes les lignes i qui appartiennent au processus r, sauf pour la ligne k
 		for (size_t i=0; i<lAI.rows(); ++i) {
 			if (i != k && i % lProcSize == lRank) { // ...différente de k
                 // On soustrait la rangée k
@@ -91,14 +109,15 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
                 lAI.getRowSlice(i) -= lAI.getRowCopy(k)*lValue;
 			}
 		}
+		cout << "Matrice inverse:\n" << lAI.str() << endl;
 
 	}
-
+	// cout << "Matrice inverse:\n" << lAI.str() << endl;
 	// On copie la partie droite de la matrice AI ainsi transformée
 	// dans la matrice courante (this).
-	// for (unsigned int i=0; i<iA.rows(); ++i) {
-	// 	iA.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
-	// }
+	for (unsigned int i=0; i<iA.rows(); ++i) {
+		iA.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
+	}
 
 }
 
