@@ -185,11 +185,11 @@ void invertParallel(Matrix& iA) {
 	MPI::COMM_WORLD.Barrier();
 
 	double * tablo = convertirArray(iA.getDataArray());
-	std::cout << lRank << " : " << convertirArrayEnString(tablo, iA.rows() * iA.rows()) << std::endl;
+	//std::cout << lRank << " : " << convertirArrayEnString(tablo, iA.rows() * iA.rows()) << std::endl;
 	MPI::COMM_WORLD.Gather(tablo, iA.rows() * iA.rows(), MPI::DOUBLE, recept, recvcounts, MPI::DOUBLE, 0);
 	
 	if (lRank == 0) {
-		std::cout << convertirArrayEnString(recept, iA.rows() * iA.rows() * lSize) << std::endl;
+	//	std::cout << convertirArrayEnString(recept, iA.rows() * iA.rows() * lSize) << std::endl;
 		int processus = 0;
 		int ligne = 0;
 		int colonne = 0;
@@ -263,10 +263,10 @@ int main(int argc, char** argv) {
 	if (lRank == 0) {
 		Matrix matriceInverseSeq(matrice);
 		invertSequential(matriceInverseSeq);
-		std::cout << std::endl << std::endl << "Sortie : " << std::endl;
-		std::cout << "Matrice aleatoire : " << std::endl << matrice.str() << std::endl;
-		std::cout << "Matrice Inverse : " << std::endl << matriceInverse.str() << std::endl;
-		std::cout << "Matrice Inverse (solution) : " << std::endl << matriceInverseSeq.str() << std::endl;
+		//std::cout << std::endl << std::endl << "Sortie : " << std::endl;
+		//std::cout << "Matrice aleatoire : " << std::endl << matrice.str() << std::endl;
+		//std::cout << "Matrice Inverse : " << std::endl << matriceInverse.str() << std::endl;
+		//std::cout << "Matrice Inverse (solution) : " << std::endl << matriceInverseSeq.str() << std::endl;
 		//std::cout << "Produit des matrices : " << std::endl << lDot.str() << std::endl;
 
 		std::cout << "Erreur " << lDot.getDataArray().sum() - lDimension << std::endl;
