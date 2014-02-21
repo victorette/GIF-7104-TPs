@@ -73,44 +73,52 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
         	// COMM_WORLD.Bcast(&ligne, 1, MPI::INT, 0);
         } 
     	valarray<double> copieLigne = lAI.getRowCopy(recv.ligne);
-        double * tableauConverti = &copieLigne[0];//new double[iA.rows()];
+        // double * tableauConverti = new double[iA.cols()];
+        double * tableauConverti = &copieLigne[0];
 		// tableauConverti = &copieLigne[0];
-		MPI::COMM_WORLD.Bcast(tableauConverti, copieLigne.size(), MPI::DOUBLE, recv.ligne % lProcSize);
-  //       if (recv.ligne % lProcSize == lRank) {
-		// }
+		MPI::COMM_WORLD.Bcast(tableauConverti, lAI.cols(), MPI::DOUBLE, recv.ligne % lProcSize);
+        if (recv.ligne % lProcSize == lRank) {
+		}
 
-		for (size_t i = 0 ; i < copieLigne.size() ; i++) {
-			//if (lRank == 0)
-			std::cout << "Rank " << lRank << " : " << lAI(k, i) << "; ";
+		for (size_t i = 0 ; i < lAI.cols() ; i++) {
+			// if (lRank != recv.ligne % lProcSize)
+			// std::cout << "Rank " << lRank << " : " << lAI(k, i) << "; ";
 			lAI(recv.ligne, i) = tableauConverti[i];
 		}
-		delete[] tableauConverti;
+		// delete[] tableauConverti;
 		
 		// cout << "Tableau: " << tableauConverti[0] << endl;
         // cout << "Rank: " << lRank << " k: " << k  << " Q: " << recv.ligne << endl;
 		// // d. Permuter localement les lignes q et k
-		q = recv.ligne;
-		if (q != k) lAI.swapRows(q, k);
+		if (recv.ligne != k) lAI.swapRows(recv.ligne, k);
+		
+		MPI::COMM_WORLD.Barrier();
 
 		// // e. Normaliser la ligne k afin que l’élément (k,k) égale 1
 		double lValue = lAI(k, k);
 		for (j = 0; j < lAI.cols(); ++j) {
+			// cout << lAI(k, j) << "; ";
 			// On divise les éléments de la rangée k
 			// par la valeur du pivot.
 			// Ainsi, lAI(k,k) deviendra égal à 1.
 			lAI(k, j) /= lValue;
 		}
+		// cout << "K: " << k << " Rank: " << lRank << " Matrice inverse:\n" << lAI.str() << endl;
 		// // f. Éliminer les éléments (i,k) pour toutes les lignes i qui appartiennent au processus r, sauf pour la ligne k
-		for (size_t i=0; i<lAI.rows(); ++i) {
-			if (i != k && i % lProcSize == lRank) { // ...différente de k
-                // On soustrait la rangée k
-                // multipliée par l'élément k de la rangée courante
-				double lValue = lAI(i, k);
-                lAI.getRowSlice(i) -= lAI.getRowCopy(k)*lValue;
+		for (size_t i = 0; i<lAI.rows(); ++i) {
+			if (i != k) { // ...différente de k
+				if (i % lProcSize == lRank)
+				{
+	                // On soustrait la rangée k
+	                // multipliée par l'élément k de la rangée courante
+					double lValue = lAI(i, k);
+	                lAI.getRowSlice(i) -= lAI.getRowCopy(k)*lValue;
+	                // MPI_Send(&localRows[maxji * (N + 1)], N + 1, MPI_DOUBLE, jpid, 0, MPI_COMM_WORLD);
+				}
+                // MPI_Recv(tmp, N + 1, MPI_DOUBLE, jpid, 0, MPI_COMM_WORLD, &status);
 			}
 		}
-		cout << "Matrice inverse:\n" << lAI.str() << endl;
-
+		// cout << "K: " << k << " Rank: " << lRank << " Matrice inverse:\n" << lAI.str() << endl;
 	}
 	// cout << "Matrice inverse:\n" << lAI.str() << endl;
 	// On copie la partie droite de la matrice AI ainsi transformée
@@ -155,7 +163,7 @@ int main(int argc, char** argv) {
 	Matrix lB(lA);
 	if (lRank == 0)
 	{
-		COMM_WORLD.Bcast(&lB,lS*lS,MPI::DOUBLE,0);
+		// COMM_WORLD.Bcast(&lB,lS*lS,MPI::DOUBLE,0);
 	}
 	cout << "Matrice random:\n" << lB.str() << endl;
     
