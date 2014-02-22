@@ -193,7 +193,7 @@ void invertParallel(Matrix& iA) {
 		int processus = 0;
 		int ligne = 0;
 		int colonne = 0;
-		std::cout.precision(2);
+		//std::cout.precision(2);
 		for (size_t i = 0 ; i < lSize * lAI.rows() * lAI.rows() ; i++) {
 			processus = i / (lAI.rows() * lAI.rows());
 			ligne = (i % (lAI.rows() * lAI.rows()) / lAI.rows());
