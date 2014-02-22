@@ -105,12 +105,13 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 			}
 		}
 	}
+	cout << "Matrice inverse: " << lRank << "\n" << lAI.str() << endl;
 
 	// int allnLignes, allstarts;
 
 	// int nLignes = (lAI.rows() + lRank)/lProcSize;
  //    int start = 0;
-	int gsize,sendarray[lAI.rows()][lAI.cols()],*sptr;
+	double gsize,sendarray[lAI.rows()][lAI.cols()],*sptr;
 	double lData[lAI.rows()][lAI.cols()];
 	for (i = 0; i<lAI.rows(); ++i) {
 		if (i % lProcSize == lRank){
@@ -122,67 +123,45 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 		}
 	}
 
-    int root, *stride, myrank, bufsize;
-    double *rbuf;
-    MPI_Datatype stype;
-    int *displs,*rcounts,offset;
+	int sizes[2]    = {lAI.rows(), lAI.cols()};         /* global size */
+    int subsizes[2] = {lNBlocks, lAI.cols()};     /* local size */
+    int starts[2]   = {1,0};                        /* where this one starts */
+    MPI_Datatype type, subarrtype;
+    MPI_Type_create_subarray(2, sizes, subsizes, starts, MPI_ORDER_C, MPI_DOUBLE, &type);
+    MPI_Type_create_resized(type, 0, lNBlocks*sizeof(double), &subarrtype);
+    MPI_Type_commit(&subarrtype);
 
-    root = 0;
-    gsize = lProcSize;
-    myrank = lRank;
-    stride = (int *)malloc(gsize*sizeof(int));
-
-    displs = (int *)malloc(gsize*sizeof(int));
-	rcounts = (int *)malloc(gsize*sizeof(int));
-	offset = 0;
-	for (i=0; i<gsize; ++i) {
-		displs[i] = offset;
-		offset += stride[i];
-		rcounts[i] = lAI.rows()-i;
-	}
-	
-	bufsize = lNBlocks * lAI.cols() * lProcSize;//displs[gsize-1]+rcounts[gsize-1];
-    rbuf = (double *)malloc(bufsize*sizeof(double));
-      /* Create datatype for the column we are sending
-       */
-    // cout << "lNBlocks: " << lNBlocks << endl;
-	MPI_Type_vector(lNBlocks, 1, lAI.cols(), MPI::DOUBLE, &stype);
-	MPI_Type_commit( &stype );
-	sptr = &sendarray[0][myrank];
-	MPI_Gatherv(sptr, 1, stype, rbuf, rcounts, displs, MPI::DOUBLE, root, MPI_COMM_WORLD);
-
-/*
-	MPI_Datatype lType;
-	MPI_Type_vector(lAI.rows(), 1, lAI.cols(), MPI::INT, &lType);
+    MPI_Datatype lType;
+	MPI_Type_vector(lAI.rows(), lAI.cols(), 3, MPI::INT, &lType);
 	MPI_Type_commit(&lType);
-	// lType = MPI::INT.create_vector(lAI.cols(), lAI.cols(), 0);
-	//lType.commit();
-	int lStride = 20;//(lProcSize - 1)*lAI.cols();
-	// double * lRecvBuf = (double *)malloc(lProcSize * lAI.rows() * lAI.cols() * sizeof(double));
-	// int recvcounts = lAI.rows() * lAI.cols();
-	double* lRecvBuf = new double[lProcSize * lStride]; 
-	int* lDisps = new int[lProcSize];
-	int* lCounts = new int[lProcSize]; 
-	
-	for (int i=0; i<lProcSize; ++i) {
-		lCounts[i] = lAI.rows(); 
-		lDisps[i] = i*lStride; 
-	}
-	MPI_Gatherv(&lData, 1, lType, lRecvBuf, lCounts, lDisps, MPI::DOUBLE, 0, MPI_COMM_WORLD);
-	if (lRank == 0) {
-		cout << "lRecvBuf:\n" << endl;
-		for ( i = 0; i < lProcSize * lStride; i++ ) {
-			cout << lRecvBuf[i] << ", ";
+
+    int sendcounts[lProcSize];
+    int displs[lProcSize];
+    if (lRank == 0) {
+    	for (i = 0; i<lProcSize; ++i) {
+    		displs[i] = i;
+    		sendcounts[i] = 0;
 		}
-		// cout << "Matrice inverse:\n" << lAI.str() << endl;
-	} else {
+    	for (i = 0; i<lAI.rows(); ++i) {
+    		sendcounts[i % lProcSize] +=1;
+		}
+    }
+
+    MPI_Gatherv(&(lData[0][0]), 6,  MPI_DOUBLE,
+                 sendarray, sendcounts, displs, lType,
+                 0, MPI_COMM_WORLD);
+
+    if (lRank == 0)
+    {
+	    for (i = 0; i<lAI.rows(); ++i) {
+			for (j = 0; j<lAI.cols(); ++j) {
+				// lAI(i,j) = lData[i][j];
+				lAI(i,j) = sendarray[i][j];
+			}
+		}
 		cout << "Matrice inverse:\n" << lAI.str() << endl;
-	}
-	*/
-	// free(lData);
-	// MPI_Type_free(&lType);
-	// MPI_Gatherv(&lAI, 1, lType, lRecvBuf, lCounts, lDisps, MPI::DOUBLE, 0, MPI_COMM_WORLD);
-	// MPI_Gatherv(lAI, 1, lType, lRecvBuf, recvcounts, allstarts, MPI::INT, 0, MPI_COMM_WORLD);
+    }
+
 	// On copie la partie droite de la matrice AI ainsi transformée
 	// dans la matrice courante (this).
 	for (unsigned int i=0; i<iA.rows(); ++i) {
