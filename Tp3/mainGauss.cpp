@@ -24,7 +24,7 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 	// ✓ la ligne i appartient au processus r si i%p=r (décomposition «row-cyclic»)
 
 	int i,j,k,lDataSize;
-	int q;
+	int q, lNBlocks = 0;
 	struct
 	{
 		double value;
@@ -40,8 +40,6 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 
 	// Pour chaque étape k: 0..n-1 de l’algorithme
 	for (k = 0; k < lDataSize; ++k) {
-		// if (k % lProcSize == lRank) {
-	 //    }
 		// a. Déterminer localement le q parmi les lignes qui appartiennent à r, puis
 		// faire une reduction (Allreduce avec MAXLOC) pour déterminer le q global
 		q = k;
@@ -85,7 +83,7 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 		
 		MPI::COMM_WORLD.Barrier();
 
-		// e. Normaliser la ligne k afin que l’élément (k,k) égale 1
+		// e. Normaliser la ligne k afin que l’élément (k,k) égale 1
 		double lValue = lAI(k, k);
 		for (j = 0; j < lAI.cols(); ++j) {
 			// On divise les éléments de la rangée k
@@ -112,14 +110,79 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 
 	// int nLignes = (lAI.rows() + lRank)/lProcSize;
  //    int start = 0;
+	int gsize,sendarray[lAI.rows()][lAI.cols()],*sptr;
+	double lData[lAI.rows()][lAI.cols()];
+	for (i = 0; i<lAI.rows(); ++i) {
+		if (i % lProcSize == lRank){
+			lNBlocks += 1;
+		}
+		for (j = 0; j<lAI.cols(); ++j) {
+			lData[i][j] = lAI(i,j);
+			sendarray[i][j] = lAI(i,j);
+		}
+	}
 
-	// MPI_Datatype lType;
-	// MPI_Type_vector(lAI.cols(), lAI.cols(), 0, MPI::INT, &lType);
-	// MPI_Type_commit(&lType);
-	// // lType = MPI::INT.create_vector(lAI.cols(), lAI.cols(), 0);
-	// //lType.commit();
+    int root, *stride, myrank, bufsize;
+    double *rbuf;
+    MPI_Datatype stype;
+    int *displs,*rcounts,offset;
 
-	// MPI_Gatherv(&(lAI(start,0)), 1, lType, &(lAI(0,0)), nLignes, allstarts, MPI::INT, 0, MPI_COMM_WORLD);
+    root = 0;
+    gsize = lProcSize;
+    myrank = lRank;
+    stride = (int *)malloc(gsize*sizeof(int));
+
+    displs = (int *)malloc(gsize*sizeof(int));
+	rcounts = (int *)malloc(gsize*sizeof(int));
+	offset = 0;
+	for (i=0; i<gsize; ++i) {
+		displs[i] = offset;
+		offset += stride[i];
+		rcounts[i] = lAI.rows()-i;
+	}
+	
+	bufsize = lNBlocks * lAI.cols() * lProcSize;//displs[gsize-1]+rcounts[gsize-1];
+    rbuf = (double *)malloc(bufsize*sizeof(double));
+      /* Create datatype for the column we are sending
+       */
+    // cout << "lNBlocks: " << lNBlocks << endl;
+	MPI_Type_vector(lNBlocks, 1, lAI.cols(), MPI::DOUBLE, &stype);
+	MPI_Type_commit( &stype );
+	sptr = &sendarray[0][myrank];
+	MPI_Gatherv(sptr, 1, stype, rbuf, rcounts, displs, MPI::DOUBLE, root, MPI_COMM_WORLD);
+
+/*
+	MPI_Datatype lType;
+	MPI_Type_vector(lAI.rows(), 1, lAI.cols(), MPI::INT, &lType);
+	MPI_Type_commit(&lType);
+	// lType = MPI::INT.create_vector(lAI.cols(), lAI.cols(), 0);
+	//lType.commit();
+	int lStride = 20;//(lProcSize - 1)*lAI.cols();
+	// double * lRecvBuf = (double *)malloc(lProcSize * lAI.rows() * lAI.cols() * sizeof(double));
+	// int recvcounts = lAI.rows() * lAI.cols();
+	double* lRecvBuf = new double[lProcSize * lStride]; 
+	int* lDisps = new int[lProcSize];
+	int* lCounts = new int[lProcSize]; 
+	
+	for (int i=0; i<lProcSize; ++i) {
+		lCounts[i] = lAI.rows(); 
+		lDisps[i] = i*lStride; 
+	}
+	MPI_Gatherv(&lData, 1, lType, lRecvBuf, lCounts, lDisps, MPI::DOUBLE, 0, MPI_COMM_WORLD);
+	if (lRank == 0) {
+		cout << "lRecvBuf:\n" << endl;
+		for ( i = 0; i < lProcSize * lStride; i++ ) {
+			cout << lRecvBuf[i] << ", ";
+		}
+		// cout << "Matrice inverse:\n" << lAI.str() << endl;
+	} else {
+		cout << "Matrice inverse:\n" << lAI.str() << endl;
+	}
+	*/
+	// free(lData);
+	// MPI_Type_free(&lType);
+	// MPI_Gatherv(&lAI, 1, lType, lRecvBuf, lCounts, lDisps, MPI::DOUBLE, 0, MPI_COMM_WORLD);
+	// MPI_Gatherv(lAI, 1, lType, lRecvBuf, recvcounts, allstarts, MPI::INT, 0, MPI_COMM_WORLD);
 	// On copie la partie droite de la matrice AI ainsi transformée
 	// dans la matrice courante (this).
 	for (unsigned int i=0; i<iA.rows(); ++i) {
@@ -168,7 +231,7 @@ int main(int argc, char** argv) {
 	cout << "Matrice random:\n" << lB.str() << endl;
     
 	invertParallel(lB, lRank, lProcSize);
-	cout << "Matrice inverse:\n" << lB.str() << endl;
+	// cout << "Matrice inverse:\n" << lB.str() << endl;
     
  //    Matrix lRes = multiplyMatrix(lA, lB);
  //    cout << "Produit des deux matrices:\n" << lRes.str() << endl;
