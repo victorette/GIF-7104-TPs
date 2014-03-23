@@ -3,9 +3,11 @@
 #include <stdlib.h>
 
 // OpenCL includes
-//#include <CL/cl.h>
+#ifdef __APPLE__
 #include <OpenCL/opencl.h>
-
+#else
+#include <CL/cl.h>
+#endif
 
 
 // Signatures
@@ -16,14 +18,18 @@ int main(int argc, char ** argv)
    printf("Running Matrix Inversion program\n\n");
 
    unsigned int lS = 5;
-   size_t datasize = sizeof(float)*lS*lS;
+   if (argc == 2) {
+      lS = atoi(argv[1]);
+   }
+
+   size_t datasize = sizeof(double)*lS*lS;
 
 
-   float mData[lS * lS];
-   float mDataB[lS * lS];
+   double mData[lS * lS];
+   double mDataB[lS * lS];
 
    for (size_t i=0; i<lS*lS; ++i) {
-        mData[i] = rand() / (float)RAND_MAX;
+        mData[i] = rand() / (double)RAND_MAX;
         mDataB[i] = 0;
     }
 
@@ -149,7 +155,7 @@ int main(int argc, char ** argv)
       exit(-1);
    }
 
-   cl_mem d_mData, d_lS;  // Input buffers on device
+   cl_mem d_mData;  // Input buffers on device
    cl_mem d_mDataB;       // Output buffer on device
 
    // Create a buffer object (d_mData) that contains the data from the host ptr A
@@ -172,7 +178,7 @@ int main(int argc, char ** argv)
    cl_program program;
    
    char *source;
-   const char *sourceFile = "gauss.cl";
+   const char *sourceFile = "gaussParallel.cl";
    // This function reads in the source code of the program
    source = readSource(sourceFile);
 
@@ -227,8 +233,8 @@ int main(int argc, char ** argv)
 
    cl_kernel kernel;
 
-   // Create a kernel from the vector addition function (named "invMatr")
-   kernel = clCreateKernel(program, "invMatr", &status);
+   // Create a kernel from the vector addition function (named "invertParallel")
+   kernel = clCreateKernel(program, "invertParallel", &status);
    if(status != CL_SUCCESS) {
       printf("clCreateKernel failed\n");
       exit(-1);
@@ -246,7 +252,7 @@ int main(int argc, char ** argv)
    // Define an index space (global work size) of threads for execution.  
    // A workgroup size (local work size) is not required, but can be used.
    size_t globalWorkSize[1];  // There are ELEMENTS threads
-   globalWorkSize[0] = lS * lS*10;
+   globalWorkSize[0] = lS;
 
    // Execute the kernel.
    // 'globalWorkSize' is the 1D dimension of the work-items
