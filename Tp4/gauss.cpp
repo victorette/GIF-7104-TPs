@@ -1,6 +1,7 @@
 // System includes
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 // OpenCL includes
 #ifdef __APPLE__
@@ -20,6 +21,10 @@ int main(int argc, char ** argv)
    unsigned int lS = 5;
    if (argc == 2) {
       lS = atoi(argv[1]);
+      if (lS > 95) {
+         printf("You must choose the matrix dimensions lower than 96 x 96 due to GPU limitation \n\n");
+         exit(0);
+      }
    }
 
    size_t datasize = sizeof(double)*lS*lS;
@@ -27,10 +32,12 @@ int main(int argc, char ** argv)
 
    double mData[lS * lS];
    double mDataB[lS * lS];
+   double lResult[lS * lS];
 
    for (size_t i=0; i<lS*lS; ++i) {
         mData[i] = rand() / (double)RAND_MAX;
         mDataB[i] = 0;
+        lResult[i] = 0;
     }
 
    
@@ -254,6 +261,11 @@ int main(int argc, char ** argv)
    size_t globalWorkSize[1];  // There are ELEMENTS threads
    globalWorkSize[0] = lS;
 
+   // Démarrer le chronomètre
+   clock_t start, stop;
+   double tm = 0.0;
+   start = clock();
+
    // Execute the kernel.
    // 'globalWorkSize' is the 1D dimension of the work-items
    status = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, NULL, globalWorkSize, NULL, 0, NULL, NULL);
@@ -266,8 +278,12 @@ int main(int argc, char ** argv)
    clEnqueueReadBuffer(cmdQueue, d_mDataB, CL_TRUE, 0, datasize, mDataB, 
                   0, NULL, NULL);
 
+   // Arrêter le chronomètre
+   stop = clock();
+   tm = (double) (stop-start)/CLOCKS_PER_SEC;
+
    // Verify correctness
-   bool result = true;
+   double sum = 0;
 
    printf("mData : \n");
    for (int i = 0; i < lS; i++) {
@@ -286,12 +302,29 @@ int main(int argc, char ** argv)
       printf("]\n");
    } 
 
-   // if(result) {
-   //    printf("Output is correct\n");
+   // for (int i=0;i<lS;i++)
+   // {
+   //    for (int j=0;j<lS;j++)
+   //    {
+   //       for (int k=0;k<lS;k++)
+   //       {
+   //          lResult[i * lS + j] += mData[i * lS + k] * mDataB[k * lS + j];
+   //       }
+   //       sum += lResult[i * lS + j];
+   //    }
    // }
-   // else {
-   //    printf("Output is incorrect\n");
+   // printf("lResult : \n");
+   // for (int i = 0; i < lS; i++) {
+   //    printf("[");
+   //    for (int k = 0; k < lS; k++) {
+   //       printf("%f, ", lResult[i * lS + k]);
+   //    }
+   //    printf("]\n");
    // }
+   // printf("Erreur %f : \n", sum-lS);
+   
+   // Afficher le temps d'exécution dans le stderr
+   printf("Temps d'execution = %f sec\n", tm);
 
    clReleaseKernel(kernel);
    clReleaseProgram(program);
