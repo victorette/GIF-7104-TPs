@@ -9,9 +9,10 @@
 
 // Signatures
 char* readSource(const char *sourceFilename);
-inline void checkErr(cl_int err, const char * name);
-float trouverMax(float* tableauDeFloat);
+inline void checkErr(cl_int err, const char * texte);
+float trouverMax(float *tableauDeFloat, unsigned int lS, cl_context p_context, cl_program p_program, cl_command_queue p_cmdQueue);
 void initOpenCL(cl_platform_id *p_platforms, cl_device_id *p_devices, cl_context *p_context, cl_command_queue *p_cmdQueue);
+void compileProgram(cl_device_id *p_devices, cl_context p_context, cl_program *p_programme);
 
 int main(int argc, char ** argv)
 {
@@ -19,10 +20,7 @@ int main(int argc, char ** argv)
     
     srand((unsigned int)time(NULL));
     
-    //unsigned int lS = 698292;
     unsigned int lS = 100;
-    //unsigned int lS = 200000000;
-    //unsigned int lS = 10;
     std::cout << "Taille du tableau : " << lS << std::endl;
     //size_t datasize = sizeof(float) * lS * lS;
     
@@ -50,67 +48,30 @@ int main(int argc, char ** argv)
     //            PROGRAM              //
     /////////////////////////////////////
     cl_program cl_program;
+    compileProgram(cl_devices, cl_context, &cl_program);
     
-    char *source;
-    const char *sourceFile = "gauss.cl";
-    // Lecture du programme source dans le fichier gauss.cl
-    source = readSource(sourceFile);
-    
-    // Créer le programme à partir du fichier source
-    cl_program = clCreateProgramWithSource(cl_context, 1, (const char**)&source, NULL, &cl_status);
-    checkErr(cl_status, "Impossible de créer le programme à partir de la source à l'aide de clCreateProgramWithSource");
-    
-    cl_int cl_buildErr;
-    // Build (compile & link) the program for the devices.
-    // Save the return value in 'buildErr' (the following
-    // code will print any compilation errors to the screen)
-    cl_buildErr = clBuildProgram(cl_program, 0, cl_devices, NULL, NULL, NULL);
-    
-    // If there are build errors, print them to the screen
-    if (cl_buildErr != CL_SUCCESS) {
-        std::cerr << "Impossible de construire le programme OpenCL." << cl_buildErr << std::endl;
-        cl_build_status cl_buildStatus;
-        for(unsigned int i = 0; i < 1; i++) {
-            clGetProgramBuildInfo(cl_program, cl_devices[i], CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &cl_buildStatus, NULL);
-            if (cl_buildStatus == CL_SUCCESS) {
-                continue;
-            }
-            
-            char *buildLog;
-            size_t buildLogSize;
-            
-            clGetProgramBuildInfo(cl_program, cl_devices[i], CL_PROGRAM_BUILD_LOG, 0, NULL, &buildLogSize);
-            
-            buildLog = (char*)malloc(buildLogSize);
-            if (buildLog == NULL) {
-                std::cerr << "Impossible d'allouer l'espace pour les journaux de la construction du programme." << std::endl;
-                exit(EXIT_FAILURE);
-            }
-            
-            clGetProgramBuildInfo(cl_program, cl_devices[i], CL_PROGRAM_BUILD_LOG, buildLogSize, buildLog, NULL);
-            buildLog[buildLogSize - 1] = '\0';
-            
-            std::cout << "Device " << i << " Build Log : " << std::endl << buildLog << std::endl;
-            free(buildLog);
-        }
-        exit(EXIT_SUCCESS);
-    
-    }
-    std::cout << "Programme OpenCL construit avec succès." << std::endl;
-    
-    /////////////////////////////////////
-    //            BUFFERS              //
-    /////////////////////////////////////
-    // Tableaux pour contenir les données à réduire.
     float *matriceReduce = new float[lS];
-    float *matriceSortieReduce = new float[lS];
     
     for (unsigned long long i = 0; i < lS ; ++i) {
         matriceReduce[i] = rand() / (float)RAND_MAX;
         //matriceReduce[i] = (int)(rand() % lS) + 1;
         
     }
+
+    std::cout << trouverMax(matriceReduce, lS, cl_context, cl_program, cl_cmdQueue);
+    std::cout << std::endl;
     
+    std::cout << trouverMax(matriceReduce, lS, cl_context, cl_program, cl_cmdQueue);
+    std::cout << std::endl;
+    
+    trouverMax(NULL, 0, NULL, NULL, NULL);
+    
+    /////////////////////////////////////
+    //            BUFFERS              //
+    /////////////////////////////////////
+    // Tableaux pour contenir les données à réduire.
+    /*
+     
     cl_mem cl_matriceReduce;
     cl_matriceReduce = clCreateBuffer(cl_context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, lS * sizeof(float), matriceReduce, &cl_status);
     checkErr(cl_status, "Impossible de créer le buffer d'entrée de test pour la matrice à l'aide de clCreateBuffer");
@@ -137,54 +98,16 @@ int main(int argc, char ** argv)
     checkErr(cl_status, "Impossible de créer l'argument 2 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
     cl_status |= clSetKernelArg(cl_kernelReduce, 3, sizeof(cl_mem), &cl_matriceSortieReduce);
     checkErr(cl_status, "Impossible de créer l'argument 3 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
-    
+    */
     /////////////////////////////////////
     //          EXECUTION              //
     /////////////////////////////////////
     // Le nombre d'éléments du tableau
-    size_t cl_ReduceProblemSize[1];
-    cl_ReduceProblemSize[0] = lS;
     
-    // Exécution du kernel
-    std::cout << std::endl << "Exécution du programme OpenCl sur le device avec les données : " << std::endl << "\t";
-    for (int i = 0 ; i < 25 ; i++)
-    {
-        std::cout << matriceReduce[i] << " ";
-    }
-    
-    // Enfilement de la commande d'exécution du kernel
-    cl_status = clEnqueueNDRangeKernel(cl_cmdQueue, cl_kernelReduce, 1, NULL, cl_ReduceProblemSize, NULL, 0, NULL, NULL);
-    checkErr(cl_status, "Impossible d'enfiler l'exécution du cl_kernelReduce sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
-    
-    // Read the OpenCL output buffer (d_C) to the host output array (C)
-    clEnqueueReadBuffer(cl_cmdQueue, cl_matriceSortieReduce, CL_TRUE, 0, lS * sizeof(float), matriceSortieReduce, 0, NULL, NULL);
-    
-    std::cout << std::endl << std::endl << "Résultat : " << std::endl << "\t";
-    while (matriceSortieReduce[1] != 0)
-    {
-        for (int i = 0 ; i < 25 ; i++)
-        {
-            std::cout << matriceSortieReduce[i] << " ";
-        }
-
-        std::cout << " (Pas tout à fait réduit)" << std::endl;
-        
-        clEnqueueWriteBuffer(cl_cmdQueue, cl_matriceReduce, CL_TRUE, 0, lS*sizeof(float), matriceSortieReduce, 0, NULL, NULL);
-    
-        cl_status = clEnqueueNDRangeKernel(cl_cmdQueue, cl_kernelReduce, 1, NULL, cl_ReduceProblemSize, NULL, 0, NULL, NULL);
-        checkErr(cl_status, "Impossible d'enfiler l'exécution du cl_kernelReduce sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
-    
-        clEnqueueReadBuffer(cl_cmdQueue, cl_matriceSortieReduce, CL_TRUE, 0, lS*sizeof(float), matriceSortieReduce, 0, NULL, NULL);
-        
-    }
-    
-    std::cout << std::endl << "Highest value : " << matriceSortieReduce[0] << " ";
-
-    std::cout << std::endl << std::endl;
-    /*
     /////////////////////////////////////
     //          VALIDATION             //
     /////////////////////////////////////
+    /*
     printf("mData : \n");
     for (int i = 0; i < lS; i++) {
         printf("[");
@@ -205,6 +128,7 @@ int main(int argc, char ** argv)
     /////////////////////////////////////
     //            CLEANUP              //
     /////////////////////////////////////
+    /*
     clReleaseKernel(cl_kernelReduce);
     clReleaseProgram(cl_program);
     clReleaseCommandQueue(cl_cmdQueue);
@@ -212,11 +136,10 @@ int main(int argc, char ** argv)
     clReleaseMemObject(cl_matriceSortieReduce);
     clReleaseContext(cl_context);
     
-    free(source);
+    
     free(cl_devices);
-    
     free(cl_platforms);
-    
+    */
     
 }
 
@@ -273,10 +196,10 @@ char* readSource(const char *sourceFilename) {
     return source;
 }
 
-inline void checkErr(cl_int err, const char * name)
+inline void checkErr(cl_int err, const char * texte)
 {
     if (err != CL_SUCCESS) {
-        std::cerr << "ERROR: " << name
+        std::cerr << "Erreur : " << texte
         << " (" << err << ")" << std::endl;
         exit(EXIT_FAILURE);
     }
@@ -442,6 +365,151 @@ void initOpenCL(cl_platform_id *p_platforms, cl_device_id *p_devices, cl_context
     checkErr(l_status, "Impossible de créer la command queue à l'aide de clCreateCommandQueue");
 }
 
-float trouverMax(float* tableauDeFloat) {
-    return 0.0;
+void compileProgram(cl_device_id *p_devices, cl_context p_context, cl_program *p_programme)
+{
+    cl_int l_status;
+    
+    char *source;
+    const char *sourceFile = "gauss.cl";
+    // Lecture du programme source dans le fichier gauss.cl
+    source = readSource(sourceFile);
+    
+    // Créer le programme à partir du fichier source
+    *p_programme = clCreateProgramWithSource(p_context, 1, (const char**)&source, NULL, &l_status);
+    checkErr(l_status, "Impossible de créer le programme à partir de la source à l'aide de clCreateProgramWithSource");
+    
+    cl_int cl_buildErr;
+    // Build (compile & link) the program for the devices.
+    // Save the return value in 'buildErr' (the following
+    // code will print any compilation errors to the screen)
+    cl_buildErr = clBuildProgram(*p_programme, 0, p_devices, NULL, NULL, NULL);
+    
+    // If there are build errors, print them to the screen
+    if (cl_buildErr != CL_SUCCESS) {
+        std::cerr << "Impossible de construire le programme OpenCL." << cl_buildErr << std::endl;
+        cl_build_status cl_buildStatus;
+        for(unsigned int i = 0; i < 1; i++) {
+            clGetProgramBuildInfo(*p_programme, p_devices[i], CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &cl_buildStatus, NULL);
+            if (cl_buildStatus == CL_SUCCESS) {
+                continue;
+            }
+            
+            char *buildLog;
+            size_t buildLogSize;
+            
+            clGetProgramBuildInfo(*p_programme, p_devices[i], CL_PROGRAM_BUILD_LOG, 0, NULL, &buildLogSize);
+            
+            buildLog = (char*)malloc(buildLogSize);
+            if (buildLog == NULL) {
+                std::cerr << "Impossible d'allouer l'espace pour les journaux de la construction du programme." << std::endl;
+                exit(EXIT_FAILURE);
+            }
+            
+            clGetProgramBuildInfo(*p_programme, p_devices[i], CL_PROGRAM_BUILD_LOG, buildLogSize, buildLog, NULL);
+            buildLog[buildLogSize - 1] = '\0';
+            
+            std::cout << "Device " << i << " Build Log : " << std::endl << buildLog << std::endl;
+            free(buildLog);
+        }
+        exit(EXIT_SUCCESS);
+        
+    }
+    std::cout << "Programme OpenCL construit avec succès." << std::endl;
+    
+    free(source);
+}
+
+float trouverMax(float *tableauDeFloat, unsigned int lS, cl_context p_context, cl_program p_program, cl_command_queue p_cmdQueue) {
+    
+    cl_int l_status;
+    static cl_mem cl_matriceReduce = NULL;
+    static cl_mem cl_matriceSortieReduce = NULL;
+    static cl_kernel cl_kernelReduce = NULL;
+    
+    float tableauFloatSortie[lS];
+    
+    if (tableauDeFloat != NULL) {
+    
+        if (cl_matriceReduce == NULL) {
+            //cl_matriceReduce = clCreateBuffer(p_context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, lS * sizeof(float), tableauDeFloat, &l_status);
+            cl_matriceReduce = clCreateBuffer(p_context, CL_MEM_READ_ONLY, lS * sizeof(float), NULL, &l_status);
+            checkErr(l_status, "Impossible de créer le buffer d'entrée de test pour la matrice à l'aide de clCreateBuffer");
+        
+            cl_matriceSortieReduce = clCreateBuffer(p_context, CL_MEM_READ_WRITE, lS * sizeof(float), NULL, &l_status);
+            checkErr(l_status, "Impossible de créer le buffer de sortie de test pour la matrice à l'aide de clCreateBuffer");
+        
+        }
+    
+        /////////////////////////////////////
+        //          KERNEL REDUCE          //
+        /////////////////////////////////////
+    
+        if (cl_kernelReduce == NULL) {
+            // Création du kernel pour trouver le nombre maximal d'une ligne (pivot)
+            cl_kernelReduce = clCreateKernel(p_program, "reduce", &l_status);
+            checkErr(l_status, "Impossible de créer le kernel cl_kernelReduce à partir du programme à l'aide de clCreateKernel");
+    
+            // Associer les paramètres aux buffres précédamment crées
+            l_status  = clSetKernelArg(cl_kernelReduce, 0, sizeof(cl_mem), &cl_matriceReduce);
+            checkErr(l_status, "Impossible de créer l'argument 0 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
+            l_status |= clSetKernelArg(cl_kernelReduce, 1, 32 * 1024, NULL);
+            checkErr(l_status, "Impossible de créer l'argument 1 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
+            l_status |= clSetKernelArg(cl_kernelReduce, 2, sizeof(unsigned int), &lS);
+            checkErr(l_status, "Impossible de créer l'argument 2 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
+            l_status |= clSetKernelArg(cl_kernelReduce, 3, sizeof(cl_mem), &cl_matriceSortieReduce);
+            checkErr(l_status, "Impossible de créer l'argument 3 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
+        }
+    
+        size_t cl_ReduceProblemSize[1];
+        cl_ReduceProblemSize[0] = lS;
+    
+        // Exécution du kernel
+        //std::cout << std::endl << "Exécution du programme OpenCl sur le device avec les données : " << std::endl << "\t";
+        //for (int i = 0 ; i < 25 ; i++)
+        //{
+        //    std::cout << tableauDeFloat[i] << " ";
+        //}
+    
+        clEnqueueWriteBuffer(p_cmdQueue, cl_matriceReduce, CL_TRUE, 0, lS*sizeof(float), tableauDeFloat, 0, NULL, NULL);
+
+        // Enfilement de la commande d'exécution du kernel
+        l_status = clEnqueueNDRangeKernel(p_cmdQueue, cl_kernelReduce, 1, NULL, cl_ReduceProblemSize, NULL, 0, NULL, NULL);
+        checkErr(l_status, "Impossible d'enfiler l'exécution du cl_kernelReduce sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
+    
+        // Read the OpenCL output buffer (d_C) to the host output array (C)
+        clEnqueueReadBuffer(p_cmdQueue, cl_matriceSortieReduce, CL_TRUE, 0, lS * sizeof(float), tableauFloatSortie, 0, NULL, NULL);
+    
+        //std::cout << std::endl << std::endl << "Résultat : " << std::endl << "\t";
+        while (tableauFloatSortie[1] != 0)
+        {
+            //for (int i = 0 ; i < 25 ; i++)
+            //{
+            //    std::cout << tableauFloatSortie[i] << " ";
+            //}
+        
+            //std::cout << " (Pas tout à fait réduit)" << std::endl;
+        
+            clEnqueueWriteBuffer(p_cmdQueue, cl_matriceReduce, CL_TRUE, 0, lS*sizeof(float), tableauFloatSortie, 0, NULL, NULL);
+        
+            l_status = clEnqueueNDRangeKernel(p_cmdQueue, cl_kernelReduce, 1, NULL, cl_ReduceProblemSize, NULL, 0, NULL, NULL);
+            checkErr(l_status, "Impossible d'enfiler l'exécution du cl_kernelReduce sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
+        
+            clEnqueueReadBuffer(p_cmdQueue, cl_matriceSortieReduce, CL_TRUE, 0, lS*sizeof(float), tableauFloatSortie, 0, NULL, NULL);
+        
+        }
+        
+    } else {
+        delete cl_matriceReduce;
+        delete cl_matriceSortieReduce;
+        delete cl_kernelReduce;
+        
+        return 0.0;
+        
+    }
+    
+    //std::cout << std::endl << "Highest value : " << tableauFloatSortie[0] << " ";
+    
+    //std::cout << std::endl << std::endl;
+    
+    return tableauFloatSortie[0];
 }
