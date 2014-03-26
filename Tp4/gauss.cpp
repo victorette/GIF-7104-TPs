@@ -42,6 +42,10 @@ int main(int argc, char ** argv)
     //               INIT              //
     /////////////////////////////////////
     std::cout << "Running Matrix Inversion program" << std::endl;
+    std::cout << "Usage: executable [-v] [-l] [size]" << std::endl;
+    std::cout << "\t-v:    " << "use verbose mode, default off" << std::endl;
+    std::cout << "\t-l:    " << "use limited GPU, default off" << std::endl;
+    std::cout << "\tsize:  " << "matrix size, default 5" << std::endl;
 
     int index;
     int c;
@@ -148,7 +152,7 @@ int main(int argc, char ** argv)
     // Define an index space (global work size) of threads for execution.  
     // A workgroup size (local work size) is not required, but can be used.
     size_t globalWorkSize[1];  // There are ELEMENTS threads
-    globalWorkSize[0] = 32;//lS;
+    globalWorkSize[0] = sqrt(l_deviceMaxWorkGroupSize);//lS;
 
     // Démarrer le chronomètre
     clock_t start, stop;
