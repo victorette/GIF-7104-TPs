@@ -4,6 +4,7 @@ __kernel void reduce(__global float* buffer,
                      __global float* result) {
     
     int global_index = get_global_id(0);
+    buffer[global_index] = fabs(buffer[global_index]);
     float accumulator = -INFINITY;
     // Loop sequentially over chunks of input vector
     while (global_index < length) {
@@ -16,9 +17,7 @@ __kernel void reduce(__global float* buffer,
     int local_index = get_local_id(0);
     scratch[local_index] = accumulator;
     barrier(CLK_LOCAL_MEM_FENCE);
-    for(int offset = get_local_size(0) / 2;
-        offset > 0;
-        offset = offset / 2) {
+    for(int offset = get_local_size(0) / 2 ; offset > 0 ; offset = offset / 2) {
         if (local_index < offset) {
             float other = scratch[local_index + offset];
             float mine = scratch[local_index];
@@ -36,12 +35,13 @@ __kernel void divideVector(__global float* buffer,
                            __const float divide) {
     int global_index = get_global_id(0);
     buffer[global_index] /= divide;
+    
 }
 
 __kernel void eliminateColumnVector(__global float* buffer,
                                     __const int bufferLineSize,
                                     __global float *divide) {
     int global_index = get_global_id(0);
-    
+    //buffer[global_index] = global_index;
     buffer[global_index] -= (buffer[global_index] * divide[global_index % bufferLineSize]);
 }
