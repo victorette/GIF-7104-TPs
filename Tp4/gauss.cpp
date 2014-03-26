@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <cmath>
+ #include <ctype.h>
+ #include <unistd.h>
 
 // OpenCL includes
 #ifdef __APPLE__
@@ -10,32 +13,56 @@
 #include <CL/cl.h>
 #endif
 
-
 // Signatures
 char* readSource(const char *sourceFilename); 
 
+unsigned int lS = 5;
+int vflag = 0;
+
 int main(int argc, char ** argv)
 {
+    /////////////////////////////////////
+    //               INIT              //
+    /////////////////////////////////////
    printf("Running Matrix Inversion program\n\n");
 
-   unsigned int lS = 5;
-   if (argc == 2) {
-      lS = atoi(argv[1]);
-      if (lS > 95) {
-         printf("You must choose the matrix dimensions lower than 96 x 96 due to GPU limitation \n\n");
-         exit(0);
+   int index;
+   int c;
+
+   opterr = 0;
+
+   while ((c = getopt (argc, argv, "v")) != -1) {
+      switch (c)
+      {
+         case 'v':
+            vflag = 1;
+            break;
+         case '?':
+            if (isprint (optopt)) {
+               fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+            }
+            else {
+               fprintf (stderr, "Unknown option character `\\x%x'.\n", optopt);
+            }
+            return 1;
+         default:
+            abort ();
       }
    }
 
-   size_t datasize = sizeof(double)*lS*lS;
+   if (optind < argc) {
+      lS = atoi(argv[optind]);
+   }
+
+   size_t datasize = sizeof(float)*lS*lS;
 
 
-   double mData[lS * lS];
-   double mDataB[lS * lS];
-   double lResult[lS * lS];
+   float mData[lS * lS];
+   float mDataB[lS * lS];
+   float lResult[lS * lS];
 
    for (size_t i=0; i<lS*lS; ++i) {
-        mData[i] = rand() / (double)RAND_MAX;
+        mData[i] = rand() / (float)RAND_MAX;
         mDataB[i] = 0;
         lResult[i] = 0;
     }
@@ -128,6 +155,7 @@ int main(int argc, char ** argv)
    printf("%u devices detected\n", numDevices);
    for(unsigned int i = 0; i < numDevices; i++) {
       char buf[100];
+      size_t max_wrkgrp_size;
       printf("Device %u: \n", i);
       status = clGetDeviceInfo(devices[i], CL_DEVICE_VENDOR,
                        sizeof(buf), buf, NULL);
@@ -135,6 +163,9 @@ int main(int argc, char ** argv)
       status |= clGetDeviceInfo(devices[i], CL_DEVICE_NAME,
                        sizeof(buf), buf, NULL);
       printf("\tName: %s\n", buf);
+      status |= clGetDeviceInfo(devices[i], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), 
+                               &max_wrkgrp_size, NULL);
+      printf("CL_DEVICE_MAX_WORK_GROUP_SIZE: %d\n",(int)max_wrkgrp_size);
 
       if(status != CL_SUCCESS) {
          printf("clGetDeviceInfo failed\n");
@@ -192,7 +223,7 @@ int main(int argc, char ** argv)
    //printf("Program source is:\n%s\n", source);
 
    // Create a program. The 'source' string is the code from the 
-   // gauss.cl file.
+   // gaussParallel.cl file.
    program = clCreateProgramWithSource(context, 1, (const char**)&source, NULL, &status);
    if(status != CL_SUCCESS) {
       printf("clCreateProgramWithSource failed\n");
@@ -259,7 +290,7 @@ int main(int argc, char ** argv)
    // Define an index space (global work size) of threads for execution.  
    // A workgroup size (local work size) is not required, but can be used.
    size_t globalWorkSize[1];  // There are ELEMENTS threads
-   globalWorkSize[0] = lS;
+   globalWorkSize[0] = 32;//lS;
 
    // Démarrer le chronomètre
    clock_t start, stop;
@@ -285,34 +316,32 @@ int main(int argc, char ** argv)
    // Verify correctness
    double sum = 0;
 
-   printf("mData : \n");
-   for (int i = 0; i < lS; i++) {
-      printf("[");
-      for (int k = 0; k < lS; k++) {
-         printf("%f, ", mData[i * lS + k]);
+   if (vflag) {
+      printf("mData : \n");
+      for (int i = 0; i < lS; i++) {
+         printf("[");
+         for (int k = 0; k < lS; k++) {
+            printf("%f, ", mData[i * lS + k]);
+         }
+         printf("]\n");
+      } 
+      printf("mDataB : \n");
+      for (int i = 0; i < lS; i++) {
+         printf("[");
+         for (int k = 0; k < lS; k++) {
+            printf("%f, ", mDataB[i * lS + k]);
+         }
+         printf("]\n");
+      } 
+   }
+   for (int i=0;i<lS;i++) {
+      for (int j=0;j<lS;j++) {
+         for (int k=0;k<lS;k++) {
+            lResult[i * lS + j] += mData[i * lS + k] * mDataB[k * lS + j];
+         }
+         sum += lResult[i * lS + j];
       }
-      printf("]\n");
-   } 
-   printf("mDataB : \n");
-   for (int i = 0; i < lS; i++) {
-      printf("[");
-      for (int k = 0; k < lS; k++) {
-         printf("%f, ", mDataB[i * lS + k]);
-      }
-      printf("]\n");
-   } 
-
-   // for (int i=0;i<lS;i++)
-   // {
-   //    for (int j=0;j<lS;j++)
-   //    {
-   //       for (int k=0;k<lS;k++)
-   //       {
-   //          lResult[i * lS + j] += mData[i * lS + k] * mDataB[k * lS + j];
-   //       }
-   //       sum += lResult[i * lS + j];
-   //    }
-   // }
+   }
    // printf("lResult : \n");
    // for (int i = 0; i < lS; i++) {
    //    printf("[");
@@ -321,7 +350,8 @@ int main(int argc, char ** argv)
    //    }
    //    printf("]\n");
    // }
-   // printf("Erreur %f : \n", sum-lS);
+   printf("Matrix : %d x %d \n", lS, lS);
+   printf("Erreur : %f \n", sum-lS);
    
    // Afficher le temps d'exécution dans le stderr
    printf("Temps d'execution = %f sec\n", tm);
