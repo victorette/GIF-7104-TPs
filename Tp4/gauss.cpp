@@ -28,213 +28,227 @@ cl_context gContext;
 cl_command_queue gCmdQueue;
 cl_program gProgramme;
 
-// Kernel Reduce Max
-cl_mem gBuffMatriceReduce = NULL;
-cl_mem gBuffMatriceSortieReduce = NULL;
-cl_kernel gKernelReduce = NULL;
-
 unsigned int lS = 5;
 int vflag = 0;
+int useGPULimitflag = 0;
+size_t l_deviceMaxWorkGroupSize = 0;
 
+/*!
+ * \brief Moo!
+ */
 int main(int argc, char ** argv)
 {
     /////////////////////////////////////
     //               INIT              //
     /////////////////////////////////////
-   std::cout << "Running Matrix Inversion program" << std::endl;
+    std::cout << "Running Matrix Inversion program" << std::endl;
 
-   int index;
-   int c;
+    int index;
+    int c;
 
-   opterr = 0;
+    opterr = 0;
 
-   while ((c = getopt (argc, argv, "v")) != -1) {
-      switch (c)
-      {
-         case 'v':
-            vflag = 1;
-            break;
-         case '?':
-            if (isprint (optopt)) {
-               std::cerr << "Unknown option '-" << optopt << "'." << std::endl;
-            }
-            else {
-               std::cerr << "Unknown option character '" << optopt << "'." << std::endl;
-            }
-            return 1;
-         default:
-            abort ();
-      }
-   }
+    while ((c = getopt (argc, argv, "vl")) != -1) {
+        switch (c){
+            case 'v':
+                vflag = 1;
+                break;
+            case 'l':
+                // this flag is actived if we are running a limited GPU (./invertParallel -l 32)
+                useGPULimitflag = 1;
+                break;
+            case '?':
+                if (isprint (optopt)) {
+                    std::cerr << "Unknown option '-" << optopt << "'." << std::endl;
+                }
+                else {
+                    std::cerr << "Unknown option character '" << optopt << "'." << std::endl;
+                }
+                return 1;
+            default:
+                abort ();
+        }
+    }
 
-   if (optind < argc) {
-      lS = atoi(argv[optind]);
-   }
-
-   /////////////////////////////////////
-   //            TABLES              //
-   /////////////////////////////////////
-   size_t datasize = sizeof(float)*lS*lS;
-
-   float matriceRandom[lS * lS];
-   float matriceReturn[lS * lS];
-   float lResult[lS * lS];
-
-   for (size_t i=0; i<lS*lS; ++i) {
-      matriceRandom[i] = rand() / (float)RAND_MAX;
-      matriceReturn[i] = 0;
-      lResult[i] = 0;
-   }
-   if (vflag){
-      std::cout << afficherTableau(matriceRandom, lS*lS);
-      std::cout << std::endl;
-   }
+    if (optind < argc) {
+        lS = atoi(argv[optind]);
+    }
  
-   // Initialisation des variables OpenCL
-   cl_int cl_status;  // use as return value for most OpenCL functions
+    // Initialisation des variables OpenCL
+    cl_int cl_status;  // use as return value for most OpenCL functions
 
-   initOpenCL();
+    initOpenCL();
 
-   /////////////////////////////////////
-   //            PROGRAM              //
-   /////////////////////////////////////
-   compileProgram();
+    /////////////////////////////////////
+    //             MATRIX              //
+    /////////////////////////////////////
+    if (useGPULimitflag) {
+        if (lS > sqrt(l_deviceMaxWorkGroupSize)){
+            std::cerr << "Using limited GPU, use " << sqrt(l_deviceMaxWorkGroupSize) << " as maximum matrix size." << std::endl;
+            exit(0);
+        }
+    }
+    size_t datasize = sizeof(float)*lS*lS;
 
-   /////////////////////////////////////
-   //            BUFFERS              //
-   /////////////////////////////////////
-   // Tableaux pour contenir les données à réduire.
-   cl_mem d_matriceRandom;  // Input buffers on device
-   cl_mem d_matriceReturn;       // Output buffer on device
+    float matriceRandom[lS * lS];
+    float matriceReturn[lS * lS];
+    float lResult[lS * lS];
 
-   // Create a buffer object (d_matriceRandom) that contains the data from the host ptr A
-   d_matriceRandom = clCreateBuffer(gContext, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, datasize, matriceRandom, &cl_status);
-   checkErr(cl_status, "Impossible de créer le buffer d'entrée de test pour la matrice à l'aide de clCreateBuffer");
+    for (size_t i=0; i<lS*lS; ++i) {
+        matriceRandom[i] = rand() / (float)RAND_MAX;
+        matriceReturn[i] = 0;
+        lResult[i] = 0;
+    }
+        if (vflag){
+        std::cout << afficherTableau(matriceRandom, lS*lS);
+        std::cout << std::endl;
+    }
 
-   // Create a buffer object (d_matriceReturn) with enough space to hold the output data
-   d_matriceReturn = clCreateBuffer(gContext, CL_MEM_READ_WRITE, datasize, NULL, &cl_status);
-   checkErr(cl_status, "Impossible de créer le buffer de sortie pour la matrice à l'aide de clCreateBuffer");
+    /////////////////////////////////////
+    //            PROGRAM              //
+    /////////////////////////////////////
+    compileProgram();
 
-   /////////////////////////////////////
-   //          KERNEL INVERT          //
-   /////////////////////////////////////
-   cl_kernel gKernelInvert;
+    /////////////////////////////////////
+    //            BUFFERS              //
+    /////////////////////////////////////
+    // Tableaux pour contenir les données à réduire.
+    cl_mem d_matriceRandom;  // Input buffers on device
+    cl_mem d_matriceReturn;       // Output buffer on device
 
-   // Create a kernel from the vector addition function (named "invertParallel")
-   gKernelInvert = clCreateKernel(gProgramme, "invertParallel", &cl_status);
-   checkErr(cl_status, "Impossible de créer le kernel cl_kernelReduce à partir du programme à l'aide de clCreateKernel");
+    // Create a buffer object (d_matriceRandom) that contains the data from the host ptr A
+    d_matriceRandom = clCreateBuffer(gContext, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, datasize, matriceRandom, &cl_status);
+    checkErr(cl_status, "Impossible de créer le buffer d'entrée de test pour la matrice à l'aide de clCreateBuffer");
+
+    // Create a buffer object (d_matriceReturn) with enough space to hold the output data
+    d_matriceReturn = clCreateBuffer(gContext, CL_MEM_READ_WRITE, datasize, NULL, &cl_status);
+    checkErr(cl_status, "Impossible de créer le buffer de sortie pour la matrice à l'aide de clCreateBuffer");
+
+    /////////////////////////////////////
+    //          KERNEL INVERT          //
+    /////////////////////////////////////
+    cl_kernel gKernelInvert;
+    if (useGPULimitflag) {
+        // Create a kernel from the vector addition function (named "invertParallel")
+        gKernelInvert = clCreateKernel(gProgramme, "invertParallelLimitedByGPU", &cl_status);
+        checkErr(cl_status, "Impossible de créer le kernel cl_kernelReduce à partir du programme à l'aide de clCreateKernel");
+    } else {
+        // Create a kernel from the vector addition function (named "invertParallel")
+        gKernelInvert = clCreateKernel(gProgramme, "invertParallel", &cl_status);
+        checkErr(cl_status, "Impossible de créer le kernel cl_kernelReduce à partir du programme à l'aide de clCreateKernel");
+    }
 
 
-   // Associate the input and output buffers with the kernel 
-   cl_status  = clSetKernelArg(gKernelInvert, 0, sizeof(cl_mem), &d_matriceRandom);
-   cl_status |= clSetKernelArg(gKernelInvert, 1, sizeof(unsigned int), &lS);
-   cl_status |= clSetKernelArg(gKernelInvert, 2, sizeof(cl_mem), &d_matriceReturn);
-   checkErr(cl_status, "Impossible de créer l'argument 1 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
+    // Associate the input and output buffers with the kernel 
+    cl_status  = clSetKernelArg(gKernelInvert, 0, sizeof(cl_mem), &d_matriceRandom);
+    cl_status |= clSetKernelArg(gKernelInvert, 1, sizeof(unsigned int), &lS);
+    cl_status |= clSetKernelArg(gKernelInvert, 2, sizeof(cl_mem), &d_matriceReturn);
+    checkErr(cl_status, "Impossible de créer l'argument 1 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
 
-   // Define an index space (global work size) of threads for execution.  
-   // A workgroup size (local work size) is not required, but can be used.
-   size_t globalWorkSize[1];  // There are ELEMENTS threads
-   globalWorkSize[0] = 32;//lS;
+    // Define an index space (global work size) of threads for execution.  
+    // A workgroup size (local work size) is not required, but can be used.
+    size_t globalWorkSize[1];  // There are ELEMENTS threads
+    globalWorkSize[0] = 32;//lS;
 
-   // Démarrer le chronomètre
-   clock_t start, stop;
-   double tm = 0.0;
-   start = clock();
+    // Démarrer le chronomètre
+    clock_t start, stop;
+    double tm = 0.0;
+    start = clock();
 
-   // Enfilement de la commande d'exécution du kernel
-   cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelInvert, 1, NULL, globalWorkSize, NULL, 0, NULL, NULL);
-   checkErr(cl_status, "Impossible d'enfiler l'exécution du cl_asdf sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
+    // Enfilement de la commande d'exécution du kernel
+    cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelInvert, 1, NULL, globalWorkSize, NULL, 0, NULL, NULL);
+    checkErr(cl_status, "Impossible d'enfiler l'exécution du cl_asdf sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
 
-   // Read the OpenCL output buffer (d_C) to the host output array (C)
-   clEnqueueReadBuffer(gCmdQueue, d_matriceReturn, CL_TRUE, 0, datasize, matriceReturn, 0, NULL, NULL);
+    // Read the OpenCL output buffer (d_C) to the host output array (C)
+    clEnqueueReadBuffer(gCmdQueue, d_matriceReturn, CL_TRUE, 0, datasize, matriceReturn, 0, NULL, NULL);
 
-   // Arrêter le chronomètre
-   stop = clock();
-   tm = (double) (stop-start)/CLOCKS_PER_SEC;
+    // Arrêter le chronomètre
+    stop = clock();
+    tm = (double) (stop-start)/CLOCKS_PER_SEC;
 
-   // Read the OpenCL output buffer (d_C) to the host output array (C)
-   clEnqueueReadBuffer(gCmdQueue, d_matriceReturn, CL_TRUE, 0, datasize, matriceReturn, 0, NULL, NULL);
+    // Read the OpenCL output buffer (d_C) to the host output array (C)
+    clEnqueueReadBuffer(gCmdQueue, d_matriceReturn, CL_TRUE, 0, datasize, matriceReturn, 0, NULL, NULL);
 
-   if (vflag) {
-      std::cout << afficherTableau(matriceReturn, lS*lS);
-      std::cout << std::endl;
-   }
+    if (vflag) {
+        std::cout << afficherTableau(matriceReturn, lS*lS);
+        std::cout << std::endl;
+    }
 
-   // Verify correctness
-   double sum = 0;
-   for (int i=0;i<lS;i++) {
-      for (int j=0;j<lS;j++) {
-         for (int k=0;k<lS;k++) {
-            lResult[i * lS + j] += matriceRandom[i * lS + k] * matriceReturn[k * lS + j];
-         }
-         sum += lResult[i * lS + j];
-      }
-   }
-   std::cout << "Matrix : " << lS << " x " << lS << std::endl;
-   std::cout << "Erreur : " << sum-lS << std::endl;
-   
-   // Afficher le temps d'exécution
-   std::cout << "Temps d'execution : " << tm << " sec" << std::endl;
+    // Verify correctness
+    double sum = 0;
+    for (int i=0;i<lS;i++) {
+        for (int j=0;j<lS;j++) {
+            for (int k=0;k<lS;k++) {
+                lResult[i * lS + j] += matriceRandom[i * lS + k] * matriceReturn[k * lS + j];
+            }
+            sum += lResult[i * lS + j];
+        }
+    }
+    std::cout << "Matrix : " << lS << " x " << lS << std::endl;
+    std::cout << "Erreur : " << sum-lS << std::endl;
 
-   clReleaseKernel(gKernelInvert);
-   clReleaseProgram(gProgramme);
-   clReleaseCommandQueue(gCmdQueue);
-   clReleaseMemObject(d_matriceRandom);
-   clReleaseMemObject(d_matriceReturn);
-   clReleaseContext(gContext);
+    // Afficher le temps d'exécution
+    std::cout << "Temps d'execution : " << tm << " sec" << std::endl;
 
-   free(gDevices);
-   free(gPlatforms);
+    clReleaseKernel(gKernelInvert);
+    clReleaseProgram(gProgramme);
+    clReleaseCommandQueue(gCmdQueue);
+    clReleaseMemObject(d_matriceRandom);
+    clReleaseMemObject(d_matriceReturn);
+    clReleaseContext(gContext);
+
+    free(gDevices);
+    free(gPlatforms);
 
 }
 
 char* readSource(const char *sourceFilename) {
 
-   FILE *fp;
-   int err;
-   int size;
+    FILE *fp;
+    int err;
+    int size;
 
-   char *source;
+    char *source;
 
-   fp = fopen(sourceFilename, "rb");
-   if(fp == NULL) {
-      printf("Could not open kernel file: %s\n", sourceFilename);
-      exit(-1);
-   }
-   
-   err = fseek(fp, 0, SEEK_END);
-   if(err != 0) {
-      printf("Error seeking to end of file\n");
-      exit(-1);
-   }
+    fp = fopen(sourceFilename, "rb");
+    if(fp == NULL) {
+        printf("Could not open kernel file: %s\n", sourceFilename);
+        exit(-1);
+    }
 
-   size = ftell(fp);
-   if(size < 0) {
-      printf("Error getting file position\n");
-      exit(-1);
-   }
+    err = fseek(fp, 0, SEEK_END);
+    if(err != 0) {
+        printf("Error seeking to end of file\n");
+        exit(-1);
+    }
 
-   err = fseek(fp, 0, SEEK_SET);
-   if(err != 0) {
-      printf("Error seeking to start of file\n");
-      exit(-1);
-   }
+    size = ftell(fp);
+    if(size < 0) {
+        printf("Error getting file position\n");
+        exit(-1);
+    }
 
-   source = (char*)malloc(size+1);
-   if(source == NULL) {
-      printf("Error allocating %d bytes for the program source\n", size+1);
-      exit(-1);
-   }
+    err = fseek(fp, 0, SEEK_SET);
+    if(err != 0) {
+        printf("Error seeking to start of file\n");
+        exit(-1);
+    }
 
-   err = fread(source, 1, size, fp);
-   if(err != size) {
-      printf("only read %d bytes\n", err);
-      exit(0);
-   }
+    source = (char*)malloc(size+1);
+    if(source == NULL) {
+        printf("Error allocating %d bytes for the program source\n", size+1);
+        exit(-1);
+    }
 
-   source[size] = '\0';
+    err = fread(source, 1, size, fp);
+    if(err != size) {
+        printf("only read %d bytes\n", err);
+        exit(0);
+    }
 
-   return source;
+    source[size] = '\0';
+
+    return source;
 }
 
 std::string afficherTableau(float *tableau, unsigned int size) {
@@ -359,7 +373,6 @@ void initOpenCL() {
         char l_deviceVersion[100];
         char l_deviceType[100];
         cl_uint l_deviceMaxComputeUnits;
-        cl_uint l_deviceMaxWorkGroupSize;
         char l_deviceSingleFpConfig[100];
         
         clGetDeviceInfo(gDevices[i], CL_DEVICE_NAME, sizeof(l_deviceName), l_deviceName, NULL);
