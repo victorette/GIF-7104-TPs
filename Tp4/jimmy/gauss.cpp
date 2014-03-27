@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cmath>
 #include <sstream>
+#include "Chrono.hpp"
 
 // OpenCL includes
 #include <OpenCL/opencl.h>
@@ -12,8 +13,9 @@
 char* readSource(const char *sourceFilename);
 inline void checkErr(cl_int err, const char * texte);
 float trouverMax(float *tableauDeFloat, unsigned int lineSize);
+int trouverMaxPos(float *tableauDeFloat, unsigned int lineSize);
 void diviserLigne(float *tableauDeFloat, float dividente, unsigned int lineSize);
-void eliminerColonne(float *matriceRandom, int matriceSize, int lineSize, int currentLine);
+void eliminerColonne(float *matriceRandom, float *matriceIdent, int matriceSize, int lineSize, int currentLine, int maxPos);
 void initOpenCL();
 void compileProgram();
 std::string afficherTableau(float *tableau, unsigned int size);
@@ -35,10 +37,10 @@ cl_kernel gKernelDivide = NULL;
 
 // Kernel eliminer colonne
 cl_mem gBuffMatriceEliminate;
+cl_mem gBuffMatriceEliminateIdentity;
 cl_mem gBuffMatriceEliminateLine;
+cl_mem gBuffMatriceEliminateLineIdentity;
 cl_kernel gKernelEliminate;
-
-
 
 // Kernel Diviser Ligne
 
@@ -48,10 +50,10 @@ cl_kernel gKernelEliminate;
 int main(int argc, char ** argv)
 {
     printf("Running Matrix Inversion program\n\n");
-    
+    Chrono monChrono;
     srand((unsigned int)time(NULL));
     
-    unsigned int lineSize = 10;
+    unsigned int lineSize = 1000;
     unsigned int linePlusIdentitySize = lineSize * 2;
     unsigned int matriceSize = lineSize * lineSize;
     std::cout << "Taille du tableau : " << matriceSize << std::endl;
@@ -67,8 +69,8 @@ int main(int argc, char ** argv)
     float *matriceInverse = (float*)calloc(matriceSize, sizeof(float));
     rand(); // Throw away the first value as it doesn't seem very "random"..
     for (unsigned long long i = 0 ; i < matriceSize ; ++i) {
-        //matriceRandom[i] = rand() / (float)(RAND_MAX - 1);
-        matriceRandom[i] = (int)(rand() % lineSize) + 1;
+        matriceRandom[i] = rand() / (float)(RAND_MAX - 1);
+        //matriceRandom[i] = (int)(rand() % 100) + 1;
         
     }
     
@@ -76,26 +78,26 @@ int main(int argc, char ** argv)
         matriceInverse[i + lineSize * i] = 1;
     }
     
-    std::cout << afficherTableau(matriceInverse, matriceSize);
+    //std::cout << afficherTableau(matriceInverse, matriceSize);
     
-    std::cout << afficherTableau(matriceRandom, matriceSize);
+    //std::cout << afficherTableau(matriceRandom, matriceSize);
     std::cout << std::endl;
 
     float max;
+    int maxPos;
     for (int k = 0 ; k < lineSize ; k++) {
         max = trouverMax(matriceRandom + lineSize * k, lineSize);
         
-        diviserLigne(matriceRandom + lineSize * k, max, lineSize);
-        diviserLigne(matriceInverse + lineSize * k, max, lineSize);
         
-        eliminerColonne(matriceRandom, matriceSize, lineSize, k);
-        eliminerColonne(matriceInverse, matriceSize, lineSize, k);
+        maxPos = trouverMaxPos(matriceRandom + lineSize * k, lineSize);
+        diviserLigne(matriceInverse + lineSize * k, matriceRandom[maxPos + lineSize * k], lineSize);
+        diviserLigne(matriceRandom + lineSize * k, matriceRandom[maxPos + lineSize * k], lineSize);
+        eliminerColonne(matriceRandom, matriceInverse, matriceSize, lineSize, k, maxPos);
+        
         //break;
     }
-    std::cout << afficherTableau(matriceRandom, matriceSize);
-    std::cout << "--------------------------------------------------" << std::endl;
-    std::cout << afficherTableau(matriceInverse, matriceSize);
-    std::cout << std::endl;
+    //std::cout << afficherTableau(matriceInverse, matriceSize);
+    std::cout <<    std::endl << "Fin " << std::endl;
     
     clReleaseKernel(gKernelReduce);
     clReleaseKernel(gKernelDivide);
@@ -109,7 +111,7 @@ int main(int argc, char ** argv)
     
     free(gDevices);
     free(gPlatforms);
-    
+    std::cout << "Duree : " << monChrono.get() << " secondes.";
     
 }
 
@@ -118,17 +120,17 @@ std::string afficherTableau(float *tableau, unsigned int size) {
     std::stringstream oss;
     
     oss.setf(std::ios::fixed, std::ios::floatfield);
-    oss.precision(2);
+    oss.precision(9);
     
     for (int i = 0 ; i < size ; i++) {
         if (i % lineSize == 0) {
-            oss << "[";
+            oss << "";
         }
         oss << tableau[i];
         if (i % lineSize != lineSize - 1) {
-            oss << ", ";
+            oss << " ";
         } else {
-            oss << "]" << std::endl;
+            oss << "" << std::endl;
         }
     }
     return oss.str();
@@ -160,6 +162,7 @@ void diviserLigne(float *tableauDeFloat, float dividente, unsigned int lineSize)
         cl_status  = clSetKernelArg(gKernelDivide, 0, sizeof(cl_mem), &gBuffMatriceDivide);
         checkErr(cl_status, "Impossible de créer l'argument 0 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
     }
+    
     cl_status = clSetKernelArg(gKernelDivide, 1, sizeof(float), &dividente);
     checkErr(cl_status, "Impossible de créer l'argument 1a du cl_kernelReducea à partir du programme à l'aide de clSetKernelArg");
     
@@ -174,7 +177,7 @@ void diviserLigne(float *tableauDeFloat, float dividente, unsigned int lineSize)
     clEnqueueReadBuffer(gCmdQueue, gBuffMatriceDivide, CL_TRUE, 0, lineSize * sizeof(float), tableauDeFloat, 0, NULL, NULL);
 }
 
-void eliminerColonne(float *matriceRandom, int matriceSize, int lineSize, int currentLine) {
+void eliminerColonne(float *matriceRandom, float *matriceIdent, int matriceSize, int lineSize, int currentLine, int maxPos) {
     
     cl_int cl_status;
     /////////////////////////////////////
@@ -182,21 +185,30 @@ void eliminerColonne(float *matriceRandom, int matriceSize, int lineSize, int cu
     /////////////////////////////////////
     // Tableaux pour contenir les données à réduire.
     if (gBuffMatriceEliminate == NULL) {
-        gBuffMatriceEliminate = clCreateBuffer(gContext, CL_MEM_READ_WRITE|CL_MEM_COPY_HOST_PTR, matriceSize * sizeof(float), matriceRandom, &cl_status);
+        gBuffMatriceEliminate = clCreateBuffer(gContext, CL_MEM_READ_WRITE, matriceSize * sizeof(float), NULL, &cl_status);
         checkErr(cl_status, "Impossible de créer le buffer d'entrée gBuffMatriceEliminate pour la matrice à l'aide de clCreateBuffer");
         
-        gBuffMatriceEliminateLine = clCreateBuffer(gContext, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, lineSize * sizeof(float), matriceRandom, &cl_status);
+        gBuffMatriceEliminateIdentity = clCreateBuffer(gContext, CL_MEM_READ_WRITE, matriceSize * sizeof(float), NULL, &cl_status);
+        checkErr(cl_status, "Impossible de créer le buffer d'entrée gBuffMatriceEliminate pour la matrice à l'aide de clCreateBuffer");
+        
+        gBuffMatriceEliminateLine = clCreateBuffer(gContext, CL_MEM_READ_ONLY, lineSize * sizeof(float), NULL, &cl_status);
         checkErr(cl_status, "Impossible de créer le buffer d'entrée gBuffMatriceEliminateLine pour la matrice à l'aide de clCreateBuffer");
+        
+        gBuffMatriceEliminateLineIdentity = clCreateBuffer(gContext, CL_MEM_READ_ONLY, lineSize * sizeof(float), NULL, &cl_status);
     }
     clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceEliminate, CL_TRUE, 0, matriceSize * sizeof(float), matriceRandom, 0, NULL, NULL);
+    clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceEliminateIdentity, CL_TRUE, 0, matriceSize * sizeof(float), matriceIdent, 0, NULL, NULL);
     clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceEliminateLine, CL_TRUE, 0, lineSize * sizeof(float), matriceRandom + lineSize * currentLine, 0, NULL, NULL);
+    clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceEliminateLineIdentity, CL_TRUE, 0, lineSize * sizeof(float), matriceIdent + lineSize * currentLine, 0, NULL, NULL);
     
     /////////////////////////////////////
     //          KERNEL REDUCE          //
     /////////////////////////////////////
     float *tabloTemp = new float[lineSize];
+    float *tabloTempIdent = new float[lineSize];
     for (int i = 0 ; i < lineSize ; i++) {
         tabloTemp[i] = matriceRandom[i + lineSize * currentLine];
+        tabloTempIdent[i] = matriceIdent[i + lineSize * currentLine];
     }
     if ( gKernelEliminate == NULL) {
         // Création du kernel pour trouver le nombre maximal d'une ligne (pivot)
@@ -206,12 +218,21 @@ void eliminerColonne(float *matriceRandom, int matriceSize, int lineSize, int cu
         // Associate the input and output buffers with the kernel
         cl_status  = clSetKernelArg(gKernelEliminate, 0, sizeof(cl_mem), &gBuffMatriceEliminate);
         checkErr(cl_status, "Impossible de créer l'argument 0 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
-        cl_status |= clSetKernelArg(gKernelEliminate, 1, sizeof(int), &lineSize);
+        cl_status  = clSetKernelArg(gKernelEliminate, 1, sizeof(cl_mem), &gBuffMatriceEliminateIdentity);
+        checkErr(cl_status, "Impossible de créer l'argument 0 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
+        cl_status |= clSetKernelArg(gKernelEliminate, 2, sizeof(int), &lineSize);
         checkErr(cl_status, "Impossible de créer l'argument 1b du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
-        cl_status |= clSetKernelArg(gKernelEliminate, 2, sizeof(cl_mem), &gBuffMatriceEliminateLine);
+        cl_status |= clSetKernelArg(gKernelEliminate, 5, sizeof(cl_mem), &gBuffMatriceEliminateLine);
+        checkErr(cl_status, "Impossible de créer l'argument 1 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
+        cl_status |= clSetKernelArg(gKernelEliminate, 6, sizeof(cl_mem), &gBuffMatriceEliminateLineIdentity);
         checkErr(cl_status, "Impossible de créer l'argument 1 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
         
     }
+    
+    cl_status = clSetKernelArg(gKernelEliminate, 3, sizeof(int), &maxPos);
+    checkErr(cl_status, "Impossible de créer l'argument 1b du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
+    cl_status |= clSetKernelArg(gKernelEliminate, 4, sizeof(int), &currentLine);
+    checkErr(cl_status, "Impossible de créer l'argument 1b du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
     
     size_t eliminateProblemSize[1];
     eliminateProblemSize[0] = matriceSize;
@@ -222,11 +243,27 @@ void eliminerColonne(float *matriceRandom, int matriceSize, int lineSize, int cu
     
     // Read the OpenCL output buffer (d_C) to the host output array (C)
     clEnqueueReadBuffer(gCmdQueue, gBuffMatriceEliminate, CL_TRUE, 0, matriceSize * sizeof(float), matriceRandom, 0, NULL, NULL);
+    clEnqueueReadBuffer(gCmdQueue, gBuffMatriceEliminateIdentity, CL_TRUE, 0, matriceSize * sizeof(float), matriceIdent, 0, NULL, NULL);
     
     for (int i = 0 ; i < lineSize ; i++) {
         matriceRandom[i + lineSize * currentLine] = tabloTemp[i];
+        matriceIdent[i + lineSize * currentLine] = tabloTempIdent[i];
     }
     
+}
+
+int trouverMaxPos(float *tableauDeFloat, unsigned int lineSize) {
+    
+    float currentMax = -INFINITY;
+    int maxPos = -1;
+    for (int i = 0 ; i < lineSize ; i++) {
+        float tmp = fabsf(tableauDeFloat[i]);
+        if (fabsf(tableauDeFloat[i]) > currentMax) {
+            currentMax = fabsf(tableauDeFloat[i]);
+            maxPos = i;
+        }
+    }
+    return maxPos;
 }
 
 float trouverMax(float *tableauDeFloat, unsigned int lineSize) {
@@ -286,7 +323,7 @@ float trouverMax(float *tableauDeFloat, unsigned int lineSize) {
     clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceReduce, CL_TRUE, 0, nextPowerOfTwo * sizeof(float), paddedTableauDeFloat, 0, NULL, NULL);
         
     // Enfilement de la commande d'exécution du kernel
-    l_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelReduce, 1, NULL, cl_ReduceProblemSize, cl_ReduceProblemSize, 0, NULL, NULL);
+    l_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelReduce, 1, NULL, cl_ReduceProblemSize, NULL, 0, NULL, NULL);
     checkErr(l_status, "Impossible d'enfiler l'exécution du cl_kernelReduce1 sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
         
     // Read the OpenCL output buffer (d_C) to the host output array (C)
