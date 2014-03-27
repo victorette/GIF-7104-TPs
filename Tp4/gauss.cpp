@@ -92,11 +92,11 @@ int main(int argc, char ** argv)
             exit(0);
         }
     }
-    size_t datasize = sizeof(float)*lS*lS;
-
-    float matriceRandom[lS * lS];
-    float matriceReturn[lS * lS];
-    float lResult[lS * lS];
+    size_t datasize = sizeof(float)*lS;
+    
+    float *matriceRandom = new float[lS * lS];
+    float *matriceReturn = (float*)calloc(lS * lS, sizeof(float));
+    float *lResult = (float*)calloc(lS * lS, sizeof(float));
 
     for (size_t i=0; i<lS*lS; ++i) {
         matriceRandom[i] = rand() / (float)RAND_MAX;
@@ -119,7 +119,7 @@ int main(int argc, char ** argv)
     // Tableaux pour contenir les données à réduire.
     cl_mem d_matriceRandom;  // Input buffers on device
     cl_mem d_matriceReturn;       // Output buffer on device
-
+    
     // Create a buffer object (d_matriceRandom) that contains the data from the host ptr A
     d_matriceRandom = clCreateBuffer(gContext, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, datasize, matriceRandom, &cl_status);
     checkErr(cl_status, "Impossible de créer le buffer d'entrée de test pour la matrice à l'aide de clCreateBuffer");
@@ -179,17 +179,17 @@ int main(int argc, char ** argv)
     }
 
     // Verify correctness
-    double sum = 0;
-    for (int i=0;i<lS;i++) {
-        for (int j=0;j<lS;j++) {
-            for (int k=0;k<lS;k++) {
-                lResult[i * lS + j] += matriceRandom[i * lS + k] * matriceReturn[k * lS + j];
-            }
-            sum += lResult[i * lS + j];
-        }
-    }
+    // double sum = 0;
+    // for (int i=0;i<lS;i++) {
+    //     for (int j=0;j<lS;j++) {
+    //         for (int k=0;k<lS;k++) {
+    //             lResult[i * lS + j] += matriceRandom[i * lS + k] * matriceReturn[k * lS + j];
+    //         }
+    //         sum += lResult[i * lS + j];
+    //     }
+    // }
     std::cout << "Matrix : " << lS << " x " << lS << std::endl;
-    std::cout << "Erreur : " << sum-lS << std::endl;
+    //std::cout << "Erreur : " << sum-lS << std::endl;
 
     // Afficher le temps d'exécution
     std::cout << "Temps d'execution : " << tm << " sec" << std::endl;
