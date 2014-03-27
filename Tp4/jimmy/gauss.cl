@@ -44,9 +44,34 @@ __kernel void divideVector(__global float* buffer,
 }
 
 __kernel void eliminateColumnVector(__global float* buffer,
+                                    __global float* bufferIdent,
                                     __const int bufferLineSize,
-                                    __global float *divide) {
+                                    __const int maxPos,
+                                    __const int currentLine,
+                                    __global float *divide,
+                                    __global float *divideIdent) {
     int global_index = get_global_id(0);
     //buffer[global_index] = global_index;
-    buffer[global_index] -= (buffer[global_index] * divide[global_index % bufferLineSize]);
+    
+    /*
+    if (global_index % bufferLineSize == 0) {
+        printf("%f", max);
+    }
+     */
+    int k = (global_index / bufferLineSize);
+    float max = buffer[maxPos + k * bufferLineSize];
+    /*
+    printf("%d) [%d, %d(%d)] %f - (%f * %f) = %f\n",
+           global_index,
+           global_index / bufferLineSize,
+           global_index % bufferLineSize,
+           maxPos,
+           bufferIdent[global_index],
+           max,
+           divideIdent[global_index % bufferLineSize],
+           bufferIdent[global_index] - ((buffer[maxPos + (global_index / bufferLineSize) * bufferLineSize] * divideIdent[global_index % bufferLineSize])));
+    */
+     buffer[global_index] -=     (max * divide[global_index % bufferLineSize]);
+    //bufferIdent[global_index] -= (bufferIdent[global_index] * divide[global_index % bufferLineSize]);
+    bufferIdent[global_index] -= (max * divideIdent[global_index % bufferLineSize]);
 }
