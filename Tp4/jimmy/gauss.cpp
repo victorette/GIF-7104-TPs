@@ -51,13 +51,10 @@ int main(int argc, char ** argv)
     
     srand((unsigned int)time(NULL));
     
-    unsigned int lineSize = 12;
+    unsigned int lineSize = 10;
     unsigned int linePlusIdentitySize = lineSize * 2;
     unsigned int matriceSize = lineSize * lineSize;
     std::cout << "Taille du tableau : " << matriceSize << std::endl;
-    
-    // Initialisation des variables OpenCL
-    cl_int cl_status;  // use as return value for most OpenCL functions
     
     initOpenCL();
     
@@ -67,64 +64,38 @@ int main(int argc, char ** argv)
     compileProgram();
     
     float *matriceRandom = new float[matriceSize];
+    float *matriceInverse = (float*)calloc(matriceSize, sizeof(float));
     rand(); // Throw away the first value as it doesn't seem very "random"..
-    for (unsigned long long i = 0; i < matriceSize ; ++i) {
+    for (unsigned long long i = 0 ; i < matriceSize ; ++i) {
         //matriceRandom[i] = rand() / (float)(RAND_MAX - 1);
         matriceRandom[i] = (int)(rand() % lineSize) + 1;
         
     }
+    
+    for (unsigned long long i = 0 ; i < lineSize ; i++) {
+        matriceInverse[i + lineSize * i] = 1;
+    }
+    
+    std::cout << afficherTableau(matriceInverse, matriceSize);
+    
     std::cout << afficherTableau(matriceRandom, matriceSize);
     std::cout << std::endl;
 
     float max;
     for (int k = 0 ; k < lineSize ; k++) {
         max = trouverMax(matriceRandom + lineSize * k, lineSize);
-        std::cout << "Max : " << max << " ";
+        
         diviserLigne(matriceRandom + lineSize * k, max, lineSize);
+        diviserLigne(matriceInverse + lineSize * k, max, lineSize);
         
         eliminerColonne(matriceRandom, matriceSize, lineSize, k);
-        
-        std::cout << afficherTableau(matriceRandom, matriceSize);
-        std::cout << std::endl;
+        eliminerColonne(matriceInverse, matriceSize, lineSize, k);
+        //break;
     }
-    
-    
-    /*
-    max = trouverMax(matriceRandom + lineSize * 1, lineSize);
-    std::cout << "Max : " << max << std::endl;
-    
-    clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceDivide, CL_TRUE, 0, lineSize * sizeof(float), matriceRandom + lineSize * 1, 0, NULL, NULL);
-    cl_status |= clSetKernelArg(gKernelDivide, 1, sizeof(float), &max);
-    checkErr(cl_status, "Impossible de créer l'argument 1 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
-    
-    // Enfilement de la commande d'exécution du kernel
-    cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelDivide, 1, NULL, divideProblemSize, NULL, 0, NULL, NULL);
-    checkErr(cl_status, "Impossible d'enfiler l'exécution du cl_asdf sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
-
-    
-    // Read the OpenCL output buffer (d_C) to the host output array (C)
-    clEnqueueReadBuffer(gCmdQueue, gBuffMatriceDivide, CL_TRUE, 0, lineSize * sizeof(float), matriceRandom + lineSize * 1, 0, NULL, NULL);
-    
-    for (int i = 0 ; i < lineSize ; i++) {
-        tablo[i] = matriceRandom[i + lineSize * 1];
-    }
-    clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceEliminate, CL_TRUE, 0, lineSize * sizeof(float), matriceRandom, 0, NULL, NULL);
-    clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceEliminateLine, CL_TRUE, 0, lineSize * sizeof(float), matriceRandom + lineSize * 1, 0, NULL, NULL);
-    
-    // Enfilement de la commande d'exécution du kernel
-    cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelEliminate, 1, NULL, eliminateProblemSize, NULL, 0, NULL, NULL);
-    checkErr(cl_status, "Impossible d'enfiler l'exécution du cl_asdf sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
-    
-    // Read the OpenCL output buffer (d_C) to the host output array (C)
-    clEnqueueReadBuffer(gCmdQueue, gBuffMatriceEliminate, CL_TRUE, 0, matriceSize * sizeof(float), matriceRandom, 0, NULL, NULL);
-    
-    for (int i = 0 ; i < lineSize ; i++) {
-        matriceRandom[i + lineSize * 1] = tablo[i];
-    }
-    
     std::cout << afficherTableau(matriceRandom, matriceSize);
+    std::cout << "--------------------------------------------------" << std::endl;
+    std::cout << afficherTableau(matriceInverse, matriceSize);
     std::cout << std::endl;
-    */
     
     clReleaseKernel(gKernelReduce);
     clReleaseKernel(gKernelDivide);
@@ -147,7 +118,7 @@ std::string afficherTableau(float *tableau, unsigned int size) {
     std::stringstream oss;
     
     oss.setf(std::ios::fixed, std::ios::floatfield);
-    oss.precision(6);
+    oss.precision(2);
     
     for (int i = 0 ; i < size ; i++) {
         if (i % lineSize == 0) {
@@ -255,20 +226,35 @@ void eliminerColonne(float *matriceRandom, int matriceSize, int lineSize, int cu
     for (int i = 0 ; i < lineSize ; i++) {
         matriceRandom[i + lineSize * currentLine] = tabloTemp[i];
     }
-    std::cout << std::endl;
+    
 }
 
 float trouverMax(float *tableauDeFloat, unsigned int lineSize) {
     
     cl_int l_status;
-     
-    float tableauFloatSortie[lineSize];
+    
+    long nextPowerOfTwo = 1;
+    while (nextPowerOfTwo < lineSize) {
+        nextPowerOfTwo = nextPowerOfTwo << 1;
+    }
+    
+    float paddedTableauDeFloat[nextPowerOfTwo];
+    float tableauFloatSortie[nextPowerOfTwo];
+    
+    for (int i = 0 ; i < nextPowerOfTwo ; i++) {
+        if (i < lineSize) {
+            paddedTableauDeFloat[i] = tableauDeFloat[i];
+            
+        } else {
+            paddedTableauDeFloat[i] = -INFINITY;
+        }
+    }
     
     if (gBuffMatriceReduce == NULL) {
-        gBuffMatriceReduce = clCreateBuffer(gContext, CL_MEM_READ_ONLY, lineSize * sizeof(float), NULL, &l_status);
+        gBuffMatriceReduce = clCreateBuffer(gContext, CL_MEM_READ_ONLY, nextPowerOfTwo * sizeof(float), NULL, &l_status);
         checkErr(l_status, "Impossible de créer le buffer d'entrée de test pour la matrice à l'aide de clCreateBuffer");
             
-        gBuffMatriceSortieReduce = clCreateBuffer(gContext, CL_MEM_READ_WRITE, lineSize * sizeof(float), NULL, &l_status);
+        gBuffMatriceSortieReduce = clCreateBuffer(gContext, CL_MEM_READ_WRITE, nextPowerOfTwo * sizeof(float), NULL, &l_status);
         checkErr(l_status, "Impossible de créer le buffer de sortie de test pour la matrice à l'aide de clCreateBuffer");
             
     }
@@ -294,26 +280,26 @@ float trouverMax(float *tableauDeFloat, unsigned int lineSize) {
     }
         
     size_t cl_ReduceProblemSize[1];
-    cl_ReduceProblemSize[0] = lineSize;
+    cl_ReduceProblemSize[0] = nextPowerOfTwo;
         
     // Exécution du kernel
-    clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceReduce, CL_TRUE, 0, lineSize * sizeof(float), tableauDeFloat, 0, NULL, NULL);
+    clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceReduce, CL_TRUE, 0, nextPowerOfTwo * sizeof(float), paddedTableauDeFloat, 0, NULL, NULL);
         
     // Enfilement de la commande d'exécution du kernel
-    l_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelReduce, 1, NULL, cl_ReduceProblemSize, NULL, 0, NULL, NULL);
+    l_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelReduce, 1, NULL, cl_ReduceProblemSize, cl_ReduceProblemSize, 0, NULL, NULL);
     checkErr(l_status, "Impossible d'enfiler l'exécution du cl_kernelReduce1 sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
         
     // Read the OpenCL output buffer (d_C) to the host output array (C)
-    clEnqueueReadBuffer(gCmdQueue, gBuffMatriceSortieReduce, CL_TRUE, 0, lineSize * sizeof(float), tableauFloatSortie, 0, NULL, NULL);
+    clEnqueueReadBuffer(gCmdQueue, gBuffMatriceSortieReduce, CL_TRUE, 0, nextPowerOfTwo * sizeof(float), tableauFloatSortie, 0, NULL, NULL);
         
     while (tableauFloatSortie[1] != 0)
     {
-        clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceReduce, CL_TRUE, 0, lineSize * sizeof(float), tableauFloatSortie, 0, NULL, NULL);
+        clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceReduce, CL_TRUE, 0, nextPowerOfTwo * sizeof(float), tableauFloatSortie, 0, NULL, NULL);
             
         l_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelReduce, 1, NULL, cl_ReduceProblemSize, NULL, 0, NULL, NULL);
         checkErr(l_status, "Impossible d'enfiler l'exécution du cl_kernelReduce2 sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
             
-        clEnqueueReadBuffer(gCmdQueue, gBuffMatriceSortieReduce, CL_TRUE, 0, lineSize * sizeof(float), tableauFloatSortie, 0, NULL, NULL);
+        clEnqueueReadBuffer(gCmdQueue, gBuffMatriceSortieReduce, CL_TRUE, 0, nextPowerOfTwo * sizeof(float), tableauFloatSortie, 0, NULL, NULL);
             
     }
     
