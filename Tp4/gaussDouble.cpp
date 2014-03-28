@@ -20,7 +20,7 @@ char* readSource(const char *sourceFilename);
 inline void checkErr(cl_int err, const char * texte);
 void initOpenCL();
 void compileProgram();
-std::string afficherTableau(float *tableau, unsigned int size);
+std::string afficherTableau(double *tableau, unsigned int size);
 
 cl_platform_id *gPlatforms;
 cl_device_id *gDevices;
@@ -92,14 +92,19 @@ int main(int argc, char ** argv)
             exit(0);
         }
     }
-    size_t datasize = sizeof(float)*lS;
+    // size_t datasize = sizeof(float)*lS;
     
-    float *matriceRandom = new float[lS * lS];
-    float *matriceReturn = (float*)calloc(lS * lS, sizeof(float));
-    float *lResult = (float*)calloc(lS * lS, sizeof(float));
+    size_t datasize = sizeof(double)*lS*lS;
+
+    // double matriceRandom[lS * lS];
+    // double matriceReturn[lS * lS];
+    // double lResult[lS * lS];
+    double *matriceRandom = new double[lS * lS];
+    double *matriceReturn = (double*)calloc(lS * lS, sizeof(double));
+    double *lResult = (double*)calloc(lS * lS, sizeof(double));
 
     for (size_t i=0; i<lS*lS; ++i) {
-        matriceRandom[i] = rand() / (float)RAND_MAX;
+        matriceRandom[i] = rand() / (double)RAND_MAX;
         matriceReturn[i] = 0;
         lResult[i] = 0;
     }
@@ -121,11 +126,11 @@ int main(int argc, char ** argv)
     cl_mem d_matriceReturn;       // Output buffer on device
     
     // Create a buffer object (d_matriceRandom) that contains the data from the host ptr A
-    d_matriceRandom = clCreateBuffer(gContext, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, lS* datasize, matriceRandom, &cl_status);
+    d_matriceRandom = clCreateBuffer(gContext, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, datasize, matriceRandom, &cl_status);
     checkErr(cl_status, "Impossible de créer le buffer d'entrée de test pour la matrice à l'aide de clCreateBuffer");
 
     // Create a buffer object (d_matriceReturn) with enough space to hold the output data
-    d_matriceReturn = clCreateBuffer(gContext, CL_MEM_READ_WRITE, lS*datasize, NULL, &cl_status);
+    d_matriceReturn = clCreateBuffer(gContext, CL_MEM_READ_WRITE, datasize, NULL, &cl_status);
     checkErr(cl_status, "Impossible de créer le buffer de sortie pour la matrice à l'aide de clCreateBuffer");
 
     /////////////////////////////////////
@@ -152,7 +157,7 @@ int main(int argc, char ** argv)
     // Define an index space (global work size) of threads for execution.  
     // A workgroup size (local work size) is not required, but can be used.
     size_t globalWorkSize[1];  // There are ELEMENTS threads
-    globalWorkSize[0] = sqrt(l_deviceMaxWorkGroupSize);//lS;
+    globalWorkSize[0] = 32;//sqrt(l_deviceMaxWorkGroupSize);//lS;
 
     // Démarrer le chronomètre
     clock_t start, stop;
@@ -179,7 +184,19 @@ int main(int argc, char ** argv)
     }
 
     // Verify correctness
+    //rowcopy
+    //mData[std::slice(iRow*lS, lS, 1)];
+
+    //getcolonne
+    //mData[std::slice(iCol, lS, lS)];
     double sum = 0;
+    // for(size_t i=0; i < lS; ++i) {
+    //     // traiter chaque colonne
+    //     for(size_t j=0; j < lS; ++j) {
+    //         lResult[i * lS + j] = (matriceRandom[std::slice(i*lS, lS, 1)] * matriceReturn[std::slice(j, lS, lS)]).sum();
+    //         sum += lResult[i * lS + j];
+    //     }
+    // }
     for (int i=0;i<lS;i++) {
         for (int j=0;j<lS;j++) {
             for (int k=0;k<lS;k++) {
@@ -255,7 +272,7 @@ char* readSource(const char *sourceFilename) {
     return source;
 }
 
-std::string afficherTableau(float *tableau, unsigned int size) {
+std::string afficherTableau(double *tableau, unsigned int size) {
     unsigned int lineSize = (unsigned int)sqrt(size);
     std::stringstream oss;
     
@@ -420,8 +437,8 @@ void compileProgram()
     cl_int l_status = 0;
     
     char *source;
-    const char *sourceFile = "gaussParallel.cl";
-    // Lecture du programme source dans le fichier gaussParallel.cl
+    const char *sourceFile = "gaussParallelDouble.cl";
+    // Lecture du programme source dans le fichier gaussParallelDouble.cl
     source = readSource(sourceFile);
     const size_t *length = {0};
     // Créer le programme à partir du fichier source
