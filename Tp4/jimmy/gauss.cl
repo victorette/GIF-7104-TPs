@@ -7,7 +7,6 @@ __kernel void reduce(__global float* buffer,
     
     //buffer[global_index] = fabs(buffer[global_index]);
     float accumulator = -INFINITY;
-    //float accumulator = 0;
     // Loop sequentially over chunks of input vector
     while (global_index < length) {
         float element = buffer[global_index];
