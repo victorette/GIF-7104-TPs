@@ -24,7 +24,7 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 	// ✓ la ligne i appartient au processus r si i%p=r (décomposition «row-cyclic»)
 
 	int i,j,k,lDataSize;
-	int q;
+	int q, lNBlocks = 0;
 	struct
 	{
 		double value;
@@ -40,8 +40,6 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 
 	// Pour chaque étape k: 0..n-1 de l’algorithme
 	for (k = 0; k < lDataSize; ++k) {
-		// if (k % lProcSize == lRank) {
-	 //    }
 		// a. Déterminer localement le q parmi les lignes qui appartiennent à r, puis
 		// faire une reduction (Allreduce avec MAXLOC) pour déterminer le q global
 		q = k;
@@ -85,7 +83,7 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 		
 		MPI::COMM_WORLD.Barrier();
 
-		// e. Normaliser la ligne k afin que l’élément (k,k) égale 1
+		// e. Normaliser la ligne k afin que l’élément (k,k) égale 1
 		double lValue = lAI(k, k);
 		for (j = 0; j < lAI.cols(); ++j) {
 			// On divise les éléments de la rangée k
@@ -107,19 +105,63 @@ void invertParallel(Matrix& iA, int lRank, int lProcSize) {
 			}
 		}
 	}
+	cout << "Matrice inverse: " << lRank << "\n" << lAI.str() << endl;
 
 	// int allnLignes, allstarts;
 
 	// int nLignes = (lAI.rows() + lRank)/lProcSize;
  //    int start = 0;
+	double gsize,sendarray[lAI.rows()][lAI.cols()],*sptr;
+	double lData[lAI.rows()][lAI.cols()];
+	for (i = 0; i<lAI.rows(); ++i) {
+		if (i % lProcSize == lRank){
+			lNBlocks += 1;
+		}
+		for (j = 0; j<lAI.cols(); ++j) {
+			lData[i][j] = lAI(i,j);
+			sendarray[i][j] = lAI(i,j);
+		}
+	}
 
-	// MPI_Datatype lType;
-	// MPI_Type_vector(lAI.cols(), lAI.cols(), 0, MPI::INT, &lType);
-	// MPI_Type_commit(&lType);
-	// // lType = MPI::INT.create_vector(lAI.cols(), lAI.cols(), 0);
-	// //lType.commit();
+	int sizes[2]    = {lAI.rows(), lAI.cols()};         /* global size */
+    int subsizes[2] = {lNBlocks, lAI.cols()};     /* local size */
+    int starts[2]   = {1,0};                        /* where this one starts */
+    MPI_Datatype type, subarrtype;
+    MPI_Type_create_subarray(2, sizes, subsizes, starts, MPI_ORDER_C, MPI_DOUBLE, &type);
+    MPI_Type_create_resized(type, 0, lNBlocks*sizeof(double), &subarrtype);
+    MPI_Type_commit(&subarrtype);
 
-	// MPI_Gatherv(&(lAI(start,0)), 1, lType, &(lAI(0,0)), nLignes, allstarts, MPI::INT, 0, MPI_COMM_WORLD);
+    MPI_Datatype lType;
+	MPI_Type_vector(lAI.rows(), lAI.cols(), 3, MPI::INT, &lType);
+	MPI_Type_commit(&lType);
+
+    int sendcounts[lProcSize];
+    int displs[lProcSize];
+    if (lRank == 0) {
+    	for (i = 0; i<lProcSize; ++i) {
+    		displs[i] = i;
+    		sendcounts[i] = 0;
+		}
+    	for (i = 0; i<lAI.rows(); ++i) {
+    		sendcounts[i % lProcSize] +=1;
+		}
+    }
+
+    MPI_Gatherv(&(lData[0][0]), 6,  MPI_DOUBLE,
+                 sendarray, sendcounts, displs, lType,
+                 0, MPI_COMM_WORLD);
+
+    if (lRank == 0)
+    {
+	    for (i = 0; i<lAI.rows(); ++i) {
+			for (j = 0; j<lAI.cols(); ++j) {
+				// lAI(i,j) = lData[i][j];
+				lAI(i,j) = sendarray[i][j];
+			}
+		}
+		cout << "Matrice inverse:\n" << lAI.str() << endl;
+    }
+
 	// On copie la partie droite de la matrice AI ainsi transformée
 	// dans la matrice courante (this).
 	for (unsigned int i=0; i<iA.rows(); ++i) {
@@ -168,7 +210,7 @@ int main(int argc, char** argv) {
 	cout << "Matrice random:\n" << lB.str() << endl;
     
 	invertParallel(lB, lRank, lProcSize);
-	cout << "Matrice inverse:\n" << lB.str() << endl;
+	// cout << "Matrice inverse:\n" << lB.str() << endl;
     
  //    Matrix lRes = multiplyMatrix(lA, lB);
  //    cout << "Produit des deux matrices:\n" << lRes.str() << endl;
