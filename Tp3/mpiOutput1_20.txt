@@ -1,0 +1,3 @@
+20 processus demarre.
+Erreur -2.94449e-11
+228.456 secondes ecoule.
