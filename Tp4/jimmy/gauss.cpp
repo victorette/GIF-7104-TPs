@@ -53,8 +53,7 @@ int main(int argc, char ** argv)
     Chrono monChrono;
     srand((unsigned int)time(NULL));
     
-    unsigned int lineSize = 1000;
-    unsigned int linePlusIdentitySize = lineSize * 2;
+    unsigned int lineSize = 2000;
     unsigned int matriceSize = lineSize * lineSize;
     std::cout << "Taille du tableau : " << matriceSize << std::endl;
     
@@ -81,23 +80,45 @@ int main(int argc, char ** argv)
     //std::cout << afficherTableau(matriceInverse, matriceSize);
     
     //std::cout << afficherTableau(matriceRandom, matriceSize);
-    std::cout << std::endl;
+    //std::cout << std::endl;
 
     float max;
     int maxPos;
     for (int k = 0 ; k < lineSize ; k++) {
+        //std::cout << afficherTableau(matriceRandom, matriceSize);
         max = trouverMax(matriceRandom + lineSize * k, lineSize);
         
-        
         maxPos = trouverMaxPos(matriceRandom + lineSize * k, lineSize);
+        //std::cout << max << " - " << maxPos << std::endl;
         diviserLigne(matriceInverse + lineSize * k, matriceRandom[maxPos + lineSize * k], lineSize);
+        float test[lineSize];
+        
+        for (int i = 0 ; i < lineSize ; i++) {
+            test[i] = matriceRandom[k + i * lineSize];
+            matriceRandom[k + i * lineSize] = matriceRandom[maxPos + i * lineSize];
+            matriceRandom[maxPos + i * lineSize] = test[i];
+            
+            test[i] = matriceInverse[k + i * lineSize];
+            matriceInverse[k + i * lineSize] = matriceInverse[maxPos + i * lineSize];
+            matriceRandom[maxPos + i * lineSize] = test[i];
+        }
+        
+        
         diviserLigne(matriceRandom + lineSize * k, matriceRandom[maxPos + lineSize * k], lineSize);
         eliminerColonne(matriceRandom, matriceInverse, matriceSize, lineSize, k, maxPos);
         
         //break;
     }
-    //std::cout << afficherTableau(matriceInverse, matriceSize);
-    std::cout <<    std::endl << "Fin " << std::endl;
+    //std::cout << afficherTableau(matriceRandom, matriceSize);
+    //std::cout << std::endl << "Fin " << std::endl;
+    
+    double sum = 0;
+    
+    for (int i = 0 ; i < matriceSize ; i++) {
+            sum += matriceInverse[i];
+    }
+    std::cout << "Matrice : " << lineSize << " x " << lineSize << std::endl;
+    std::cout << "Erreur : " << sum - lineSize << std::endl;
     
     clReleaseKernel(gKernelReduce);
     clReleaseKernel(gKernelDivide);
@@ -111,7 +132,7 @@ int main(int argc, char ** argv)
     
     free(gDevices);
     free(gPlatforms);
-    std::cout << "Duree : " << monChrono.get() << " secondes.";
+    std::cout << "Duree : " << monChrono.get() << " secondes." << std::endl;
     
 }
 
