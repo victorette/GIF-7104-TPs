@@ -7,7 +7,11 @@
 #include "Chrono.hpp"
 
 // OpenCL includes
+#ifdef __APPLE__
 #include <OpenCL/opencl.h>
+#else
+#include <CL/cl.h>
+#endif
 
 // Signatures
 char* readSource(const char *sourceFilename);
@@ -41,7 +45,8 @@ cl_mem gBuffMatriceEliminateIdentity;
 cl_mem gBuffMatriceEliminateLine;
 cl_mem gBuffMatriceEliminateLineIdentity;
 cl_kernel gKernelEliminate;
-
+size_t cl_LocalWorkSize[3];
+    
 // Kernel Diviser Ligne
 
 /*!
@@ -56,7 +61,14 @@ int main(int argc, char ** argv)
     unsigned int lineSize = 2000;
     unsigned int matriceSize = lineSize * lineSize;
     std::cout << "Taille du tableau : " << matriceSize << std::endl;
-    
+    cl_LocalWorkSize[0] = 1024;
+    cl_LocalWorkSize[1] = 1024;
+    cl_LocalWorkSize[2] = 64;
+    if (argc == 3) {
+        lineSize = atoi(argv[1]);
+        cl_LocalWorkSize[0] = atoi(argv[2]);
+        cl_LocalWorkSize[1] = cl_LocalWorkSize[0];
+    }
     initOpenCL();
     
     /////////////////////////////////////
@@ -109,6 +121,10 @@ int main(int argc, char ** argv)
         
         //break;
     }
+    size_t work_group_size = 0;
+    cl_int cl_status = clGetKernelWorkGroupInfo(gKernelDivide, gDevices[0], CL_KERNEL_WORK_GROUP_SIZE, sizeof(work_group_size), &work_group_size, NULL);
+    std::cout << "CL_KERNEL_WORK_GROUP_SIZE : " << work_group_size << std::endl;
+
     //std::cout << afficherTableau(matriceRandom, matriceSize);
     //std::cout << std::endl << "Fin " << std::endl;
     
@@ -183,15 +199,17 @@ void diviserLigne(float *tableauDeFloat, float dividente, unsigned int lineSize)
         cl_status  = clSetKernelArg(gKernelDivide, 0, sizeof(cl_mem), &gBuffMatriceDivide);
         checkErr(cl_status, "Impossible de créer l'argument 0 du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
     }
-    
+
     cl_status = clSetKernelArg(gKernelDivide, 1, sizeof(float), &dividente);
     checkErr(cl_status, "Impossible de créer l'argument 1a du cl_kernelReducea à partir du programme à l'aide de clSetKernelArg");
     
     size_t divideProblemSize[1];
-    divideProblemSize[0] = lineSize;
+    divideProblemSize[0] = cl_LocalWorkSize[0];//lineSize;
+    // size_t cl_LocalWorkSize[1];
+    // cl_LocalWorkSize[0] = 32;
     
     // Enfilement de la commande d'exécution du kernel
-    cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelDivide, 1, NULL, divideProblemSize, NULL, 0, NULL, NULL);
+    cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelDivide, 1, NULL, divideProblemSize, cl_LocalWorkSize, 0, NULL, NULL);
     checkErr(cl_status, "Impossible d'enfiler l'exécution du cl_asdf sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
     
     // Read the OpenCL output buffer (d_C) to the host output array (C)
@@ -256,10 +274,12 @@ void eliminerColonne(float *matriceRandom, float *matriceIdent, int matriceSize,
     checkErr(cl_status, "Impossible de créer l'argument 1b du cl_kernelReduce à partir du programme à l'aide de clSetKernelArg");
     
     size_t eliminateProblemSize[1];
-    eliminateProblemSize[0] = matriceSize;
+    eliminateProblemSize[0] = cl_LocalWorkSize[0];//matriceSize;
+    // size_t cl_LocalWorkSize[1];
+    // cl_LocalWorkSize[0] = 32;
     
     // Enfilement de la commande d'exécution du kernel
-    cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelEliminate, 1, NULL, eliminateProblemSize, NULL, 0, NULL, NULL);
+    cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelEliminate, 1, NULL, eliminateProblemSize, cl_LocalWorkSize, 0, NULL, NULL);
     checkErr(cl_status, "Impossible d'enfiler l'exécution du cl_asdf sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
     
     // Read the OpenCL output buffer (d_C) to the host output array (C)
@@ -338,13 +358,15 @@ float trouverMax(float *tableauDeFloat, unsigned int lineSize) {
     }
         
     size_t cl_ReduceProblemSize[1];
-    cl_ReduceProblemSize[0] = nextPowerOfTwo;
+    cl_ReduceProblemSize[0] = cl_LocalWorkSize[0];//nextPowerOfTwo;
+    // size_t cl_LocalWorkSize[1];
+    // cl_LocalWorkSize[0] = 32;
         
     // Exécution du kernel
     clEnqueueWriteBuffer(gCmdQueue, gBuffMatriceReduce, CL_TRUE, 0, nextPowerOfTwo * sizeof(float), paddedTableauDeFloat, 0, NULL, NULL);
         
     // Enfilement de la commande d'exécution du kernel
-    l_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelReduce, 1, NULL, cl_ReduceProblemSize, NULL, 0, NULL, NULL);
+    l_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelReduce, 1, NULL, cl_ReduceProblemSize, cl_LocalWorkSize, 0, NULL, NULL);
     checkErr(l_status, "Impossible d'enfiler l'exécution du cl_kernelReduce1 sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
         
     // Read the OpenCL output buffer (d_C) to the host output array (C)
@@ -523,6 +545,7 @@ void initOpenCL() {
         char l_deviceType[100];
         cl_uint l_deviceMaxComputeUnits;
         cl_uint l_deviceMaxWorkGroupSize;
+        cl_uint l_deviceAddresBits;
         char l_deviceSingleFpConfig[100];
         
         clGetDeviceInfo(gDevices[i], CL_DEVICE_NAME, sizeof(l_deviceName), l_deviceName, NULL);
@@ -533,6 +556,7 @@ void initOpenCL() {
         clGetDeviceInfo(gDevices[i], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(l_deviceMaxComputeUnits), &l_deviceMaxComputeUnits, NULL);
         clGetDeviceInfo(gDevices[i], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(l_deviceMaxWorkGroupSize), &l_deviceMaxWorkGroupSize, NULL);
         clGetDeviceInfo(gDevices[i], CL_DEVICE_SINGLE_FP_CONFIG, sizeof(l_deviceSingleFpConfig), &l_deviceSingleFpConfig, NULL);
+        clGetDeviceInfo(gDevices[i], CL_DEVICE_ADDRESS_BITS, sizeof(l_deviceAddresBits), &l_deviceAddresBits, NULL);
     
         std::cout << "\tCL_DEVICE_NAME:                        " << l_deviceName << std::endl;
         std::cout << "\tCL_DEVICE_VENDOR:                      " << l_deviceVendor << std::endl;
@@ -541,6 +565,7 @@ void initOpenCL() {
         std::cout << "\tCL_DEVICE_MAX_COMPUTE_UNITS:           " << l_deviceMaxComputeUnits << std::endl;
         std::cout << "\tCL_DEVICE_MAX_WORK_GROUP_SIZE:         " << l_deviceMaxWorkGroupSize << std::endl;
         std::cout << "\tCL_DEVICE_SINGLE_FP_CONFIG:            " << l_deviceSingleFpConfig << std::endl;
+        std::cout << "\tCL_DEVICE_ADDRESS_BITS:                " << l_deviceAddresBits << std::endl;
     }
     
     std::cout << std::endl;

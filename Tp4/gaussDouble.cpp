@@ -32,6 +32,7 @@ unsigned int lS = 5;
 int vflag = 0;
 int useGPULimitflag = 0;
 size_t l_deviceMaxWorkGroupSize = 0;
+size_t cl_LocalWorkSize[1];
 
 /*!
  * \brief Moo!
@@ -73,9 +74,12 @@ int main(int argc, char ** argv)
                 abort ();
         }
     }
-
+    cl_LocalWorkSize[0] = 32;
     if (optind < argc) {
         lS = atoi(argv[optind]);
+        if (optind + 1 < argc) {
+            cl_LocalWorkSize[0] = atoi(argv[optind+1]);
+        }
     }
  
     // Initialisation des variables OpenCL
@@ -157,7 +161,7 @@ int main(int argc, char ** argv)
     // Define an index space (global work size) of threads for execution.  
     // A workgroup size (local work size) is not required, but can be used.
     size_t globalWorkSize[1];  // There are ELEMENTS threads
-    globalWorkSize[0] = 32;//sqrt(l_deviceMaxWorkGroupSize);//lS;
+    globalWorkSize[0] = l_deviceMaxWorkGroupSize;//lS;
 
     // Démarrer le chronomètre
     clock_t start, stop;
@@ -165,7 +169,8 @@ int main(int argc, char ** argv)
     start = clock();
 
     // Enfilement de la commande d'exécution du kernel
-    cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelInvert, 1, NULL, globalWorkSize, NULL, 0, NULL, NULL);
+
+    cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelInvert, 1, NULL, globalWorkSize, cl_LocalWorkSize, 0, NULL, NULL);
     checkErr(cl_status, "Impossible d'enfiler l'exécution du cl_asdf sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
 
     // Read the OpenCL output buffer (d_C) to the host output array (C)
@@ -395,6 +400,7 @@ void initOpenCL() {
         char l_deviceType[100];
         cl_uint l_deviceMaxComputeUnits;
         char l_deviceSingleFpConfig[100];
+        size_t workitem_size[3];
         
         clGetDeviceInfo(gDevices[i], CL_DEVICE_NAME, sizeof(l_deviceName), l_deviceName, NULL);
         clGetDeviceInfo(gDevices[i], CL_DEVICE_VENDOR, sizeof(l_deviceVendor), l_deviceVendor, NULL);
@@ -403,6 +409,7 @@ void initOpenCL() {
         clGetDeviceInfo(gDevices[i], CL_DEVICE_TYPE, sizeof(l_deviceType), l_deviceType, NULL);
         clGetDeviceInfo(gDevices[i], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(l_deviceMaxComputeUnits), &l_deviceMaxComputeUnits, NULL);
         clGetDeviceInfo(gDevices[i], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(l_deviceMaxWorkGroupSize), &l_deviceMaxWorkGroupSize, NULL);
+        clGetDeviceInfo(gDevices[i], CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(workitem_size), &workitem_size, NULL);
         clGetDeviceInfo(gDevices[i], CL_DEVICE_SINGLE_FP_CONFIG, sizeof(l_deviceSingleFpConfig), &l_deviceSingleFpConfig, NULL);
         
         std::cout << "\tCL_DEVICE_NAME:                        " << l_deviceName << std::endl;
@@ -412,6 +419,7 @@ void initOpenCL() {
         std::cout << "\tCL_DEVICE_MAX_COMPUTE_UNITS:           " << l_deviceMaxComputeUnits << std::endl;
         std::cout << "\tCL_DEVICE_MAX_WORK_GROUP_SIZE:         " << l_deviceMaxWorkGroupSize << std::endl;
         std::cout << "\tCL_DEVICE_SINGLE_FP_CONFIG:            " << l_deviceSingleFpConfig << std::endl;
+        std::cout << "\tCL_DEVICE_MAX_WORK_ITEM_SIZES:         " << workitem_size[0] << ", " << workitem_size[1] << ", " << workitem_size[2]<< std::endl;
     }
     
     std::cout << std::endl;
