@@ -1,0 +1,3 @@
+16 processus demarre.
+Erreur -2.94449e-11
+121.778 secondes ecoule.
