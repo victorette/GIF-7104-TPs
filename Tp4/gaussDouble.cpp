@@ -161,7 +161,7 @@ int main(int argc, char ** argv)
     // Define an index space (global work size) of threads for execution.  
     // A workgroup size (local work size) is not required, but can be used.
     size_t globalWorkSize[1];  // There are ELEMENTS threads
-    globalWorkSize[0] = l_deviceMaxWorkGroupSize;//lS;
+    globalWorkSize[0] = 32;//l_deviceMaxWorkGroupSize;//lS;
 
     // Démarrer le chronomètre
     clock_t start, stop;
@@ -170,7 +170,8 @@ int main(int argc, char ** argv)
 
     // Enfilement de la commande d'exécution du kernel
 
-    cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelInvert, 1, NULL, globalWorkSize, cl_LocalWorkSize, 0, NULL, NULL);
+    cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelInvert, 1, NULL, globalWorkSize, NULL, 0, NULL, NULL);
+    // cl_status = clEnqueueNDRangeKernel(gCmdQueue, gKernelInvert, 1, NULL, globalWorkSize, cl_LocalWorkSize, 0, NULL, NULL);
     checkErr(cl_status, "Impossible d'enfiler l'exécution du cl_asdf sur cl_cmdQueue à l'aide de clEnqueueNDRangeKernel");
 
     // Read the OpenCL output buffer (d_C) to the host output array (C)
